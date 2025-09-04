@@ -1,0 +1,30 @@
+app:
+name: "Fitness Voice Assistant"
+host: "0.0.0.0"
+port: 8000
+
+stt:
+engine: "faster-whisper"
+model_size: "base" # tiny, base, small, medium, large-v3 (choose per your GPU/CPU)
+compute_type: "int8" # int8, int8_float16, float16, float32
+
+tts:
+model_name: "tts_models/en/ljspeech/tacotron2-DDC"
+speaker_wav: null # optional path to clone voice
+sample_rate: 22050
+
+pose:
+min_detection_conf: 0.5
+min_tracking_conf: 0.5
+draw: true
+
+mistakes:
+elbow_extended_deg: 160
+elbow_flexed_deg: 30
+
+nlu:
+threshold: 0.5
+
+logging:
+level: "INFO"
+file: "logs/app.log"

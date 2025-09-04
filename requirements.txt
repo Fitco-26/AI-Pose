@@ -1,0 +1,31 @@
+# Core
+numpy==1.26.4
+opencv-python==4.9.0.80
+mediapipe==0.10.14
+pip install ultralytics
+
+
+# STT (Whisper inference, local & free)
+faster-whisper==1.0.3
+soundfile==0.12.1
+
+
+# TTS (Coqui, local & free)
+gTTS==2.5.1
+playsound==1.2.2
+
+
+
+# API
+fastapi==0.115.2
+uvicorn==0.30.3
+pydantic==2.8.2
+python-multipart==0.0.9
+
+
+# NLU & utils
+scikit-learn==1.5.0
+regex==2024.7.24
+PyYAML==6.0.2
+pandas==2.2.2
+SQLAlchemy==2.0.31

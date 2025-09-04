@@ -1,0 +1,5 @@
+-> what all will the camera will detect ?
+Ans) There are three things that are done by the camera live while the application is running :
+	-Intensity of light and any smug on the camera lenes
+	-What is held by the user say duble or maybe a elastic band for execise 
+	-And the main one Pose dectection

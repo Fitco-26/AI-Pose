@@ -1,0 +1,63 @@
+fitness_voice_assistant/
+│
+├── app.py                        # Main entry (runs assistant backend)
+├── requirements.txt
+├── config.yaml                    # Thresholds, API keys, toggles
+├── README.md
+├── .gitignore
+│
+├── modules/                       # Core AI & Assistant logic
+│   ├── stt/                       # Speech-to-Text
+│   │   └── stt_online.py          # Whisper API wrapper (realtime STT)
+│   │
+│   ├── tts/                       # Text-to-Speech
+│   │   └── tts_online.py          # Coqui TTS or gTTS wrapper
+│   │
+│   ├── nlu.py                     # Intent classification (Rasa/Sklearn)
+│   ├── actions.py                 # Workout, diet, reminders
+│   │
+│   ├── posture/                   # Pose & Mistake detection
+│   │   ├── posture.py             # Pose estimation (MediaPipe)
+│   │   ├── mistakes.py            # Mistake detection + curl counter
+│   │   └── utils/                 # Pose math helpers
+│   │       ├── angle_utils.py
+│   │       └── drawing_utils.py
+│   │
+│   └── __init__.py
+│
+├── services/                      # Backend services
+│   ├── db_service.py              # SQLite/Postgres for logs
+│   ├── reminder_service.py        # Notifications
+│   └── logger_service.py          # Logging
+│
+├── data/                          # Data & datasets
+│   ├── intents.json               # Intent dataset
+│   ├── diet_plans.json            # Diet/nutrition DB
+│   ├── users.db                   # SQLite DB
+│   └── reps_logs.csv              # Workout logs
+│
+├── models/                        # ML Models
+│   ├── intent_classifier.pkl
+│   └── posture_model.onnx
+│
+├── assets/                        # Extra assets
+│   ├── voices/
+│   └── icons/
+│
+├── backend/                       # API layer
+│   ├── api.py                     # FastAPI/Flask endpoints
+│   └── __init__.py
+│
+├── ui/                            # Frontend
+│   ├── dashboard/                 # React/Next.js frontend
+│   └── charts/                    # Progress visualization (Chart.js)
+│
+├── tests/                         # Unit & integration tests
+│   ├── test_stt.py
+│   ├── test_tts.py
+│   ├── test_nlu.py
+│   ├── test_posture.py
+│   └── test_end2end.py
+│
+└── notebooks/                     # Experiment zone
+    └── pose_experiments.ipynb
