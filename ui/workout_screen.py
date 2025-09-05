@@ -154,7 +154,14 @@ class WorkoutScreen(QWidget):
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb.shape
         qt_img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888)
-        self.video_label.setPixmap(QPixmap.fromImage(qt_img))
+        pixmap = QPixmap.fromImage(qt_img)
+        self.video_label.setPixmap(
+            pixmap.scaled(
+                self.video_label.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+        )
 
     def _calculate_angle(self, landmarks):
         """Calculate elbow angle using Mediapipe landmarks (right arm)."""
@@ -182,6 +189,11 @@ class WorkoutScreen(QWidget):
             # Restore 70/30 layout
             self.stats_panel.show()
             self.splitter.setSizes([700, 300])
+            self.splitter.setStretchFactor(0, 7)
+            self.splitter.setStretchFactor(1, 3)
+            self.video_label.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                                           QtWidgets.QSizePolicy.Expanding)
+
             self.fullscreen = False
         else:
             # Hide stats panel → 100% video feed
