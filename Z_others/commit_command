@@ -1,3 +1,6 @@
 git add .
 git commit -m "Your message"
 git push
+
+#To run train model
+yolo task=detect mode=train model=runs/detect/train3/weights/last.pt data=dumbbell_dataset/data.yaml epochs=30

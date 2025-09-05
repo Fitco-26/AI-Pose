@@ -3,3 +3,15 @@ Ans) There are three things that are done by the camera live while the applicati
 	-Intensity of light and any smug on the camera lenes
 	-What is held by the user say duble or maybe a elastic band for execise 
 	-And the main one Pose dectection
+
+
+
+	 want a data set that can tell by looking if the person fat or to slim
+
+	 calorie burnt
+
+	 UniqueData Body Measurements Dataset (HuggingFace)
+Provides standardized front, side, and selfie photos for hundreds of individuals, each linked to a JSON and CSV file
+containing BMI, weight, height, hip circumference, and body-fat relevant features.
+Facilitates category and regression models (e.g., “slim,” “average,” “fat”).
+LINK : https://huggingface.co/datasets/UniqueData/body-measurements-dataset

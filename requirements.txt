@@ -2,26 +2,24 @@
 numpy==1.26.4
 opencv-python==4.9.0.80
 mediapipe==0.10.14
-pip install ultralytics
-
+ultralytics==8.3.20
+torch>=2.2.0
+torchvision>=0.17.0
 
 # STT (Whisper inference, local & free)
 faster-whisper==1.0.3
 soundfile==0.12.1
 
-
-# TTS (Coqui, local & free)
+# TTS (Choose one: gTTS for online, or Coqui TTS for offline)
 gTTS==2.5.1
 playsound==1.2.2
-
-
+# TTS==0.22.0   # uncomment if you want Coqui TTS instead of gTTS
 
 # API
 fastapi==0.115.2
 uvicorn==0.30.3
 pydantic==2.8.2
 python-multipart==0.0.9
-
 
 # NLU & utils
 scikit-learn==1.5.0
