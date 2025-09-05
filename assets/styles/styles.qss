@@ -1,0 +1,25 @@
+/* General app background */
+QWidget {
+    background-color: #1e1e2f;
+    color: #ffffff;
+    font-family: "Segoe UI";
+}
+
+/* Labels */
+QLabel {
+    font-size: 16px;
+    font-weight: bold;
+    color: #f5f5f5;
+}
+
+/* Buttons */
+QPushButton {
+    background-color: #3a3a5a;
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+QPushButton:hover {
+    background-color: #50507a;
+}
