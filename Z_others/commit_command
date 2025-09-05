@@ -4,6 +4,7 @@ git push
 
 #If psuh has a problem use this
 git push origin main
+to covert back to above command -> git push -u origin main
 
 
 #To run train model
