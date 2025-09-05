@@ -7,7 +7,10 @@ def main():
     app = QApplication(sys.argv)
     window = WorkoutScreen()
     window.setWindowTitle("Fitness Assistant")
-    window.show()
+
+    # Open window in maximized mode (with minimize, maximize, close buttons)
+    window.showMaximized()
+
     sys.exit(app.exec_())
 
 

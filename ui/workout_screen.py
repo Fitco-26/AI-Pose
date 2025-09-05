@@ -1,6 +1,7 @@
 import cv2
+import os
 import numpy as np
-from PyQt5 import QtWidgets, QtGui, QtCore
+from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QProgressBar, QSplitter
 )
@@ -85,7 +86,14 @@ class WorkoutScreen(QWidget):
 
         # -------- Window Setup --------
         self.setWindowTitle("Workout Screen")
-        self.showMaximized()  # ✅ maximized with title bar + buttons
+
+        # -------- Load Stylesheet --------
+        qss_path = os.path.join(
+            os.path.dirname(__file__), "..", "assets", "styles", "styles.qss"
+        )
+        if os.path.exists(qss_path):
+            with open(qss_path, "r") as f:
+                self.setStyleSheet(f.read())
 
     def start_camera(self):
         self.cap = cv2.VideoCapture(0)
@@ -132,7 +140,8 @@ class WorkoutScreen(QWidget):
             left_stage = self.counter.left_stage if self.counter.left_stage else "-"
             right_stage = self.counter.right_stage if self.counter.right_stage else "-"
             self.stage_label.setText(
-                f"Stage: L-{left_stage} | R-{right_stage}")
+                f"Stage: L-{left_stage} | R-{right_stage}"
+            )
 
             # Calculate right arm angle → update progress bar
             angle = self._calculate_angle(results.pose_landmarks.landmark)
@@ -183,6 +192,11 @@ class WorkoutScreen(QWidget):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
+
+    # ✅ Create the WorkoutScreen as a top-level window
     window = WorkoutScreen()
-    window.show()
+    # ensures title bar + minimize/maximize/close
+    window.setWindowFlags(Qt.Window)
+    window.showMaximized()            # open maximized with system buttons
+
     app.exec_()
