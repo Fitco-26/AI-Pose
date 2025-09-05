@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QPushButton, QProgressBar, QSplitter
 )
@@ -11,8 +12,8 @@ from modules.pose_detector import PoseDetector
 
 
 class WorkoutScreen(QWidget):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
         # -------- Video Feed --------
         self.video_label = QLabel("Camera loading...")
@@ -82,6 +83,10 @@ class WorkoutScreen(QWidget):
         # -------- Fullscreen Toggle State --------
         self.fullscreen = False
 
+        # -------- Window Setup --------
+        self.setWindowTitle("Workout Screen")
+        self.showMaximized()  # ✅ maximized with title bar + buttons
+
     def start_camera(self):
         self.cap = cv2.VideoCapture(0)
         self.timer.start(30)
@@ -121,7 +126,8 @@ class WorkoutScreen(QWidget):
             right = self.counter.right_counter
             total = left + right
             self.rep_label.setText(
-                f"Left: {left} | Right: {right} | Total: {total}")
+                f"Left: {left} | Right: {right} | Total: {total}"
+            )
 
             left_stage = self.counter.left_stage if self.counter.left_stage else "-"
             right_stage = self.counter.right_stage if self.counter.right_stage else "-"
@@ -173,3 +179,10 @@ class WorkoutScreen(QWidget):
             self.stats_panel.hide()
             self.splitter.setSizes([1000, 0])
             self.fullscreen = True
+
+
+if __name__ == "__main__":
+    app = QtWidgets.QApplication([])
+    window = WorkoutScreen()
+    window.show()
+    app.exec_()
