@@ -1,0 +1,40 @@
+FITNESS_VOICE_ASSISTANT/
+│── main.py                       # 🚀 App entry point (launches Dashboard)
+│
+│── ui/                           # 💻 User Interface (PyQt5/PySide6)
+│   ├── main_window.py            # Base window & navigation (Dashboard <-> Workout)
+│   ├── dashboard.py              # Dashboard screen (history, profile, start workout)
+│   ├── workout_screen.py         # Live workout screen (video + stats panel)
+│   ├── components/               # Reusable widgets
+│   │   ├── rep_counter.py        # Large rep display widget
+│   │   ├── progress_bar.py       # Rep/set progress bar
+│   │   ├── posture_tip.py        # Posture correction popup/text panel
+│   │   ├── video_widget.py       # Webcam + overlay container
+│   ├── styles/
+│       ├── theme.qss             # Dark theme (neon green/blue)
+│       ├── colors.json           # Centralized color palette
+│
+│── modules/                      # 🤖 Core fitness logic (already exists)
+│   ├── pose_detector.py          # Pose estimation
+│   ├── curl_counter.py           # Rep counting logic
+│   ├── feedback_engine.py        # Posture correction logic
+│   ├── ... (your existing ones: actions, stt, tts, etc.)
+│
+│── assets/                       # 🎨 Static assets
+│   ├── icons/                    # UI icons (play, pause, stop, profile, etc.)
+│   ├── voices/                   # Voice assistant files (already exists)
+│   ├── fonts/                    # Optional: bold fitness fonts
+│   ├── images/                   # Backgrounds, profile placeholders
+│
+│── data/                         # 📊 User & workout data
+│   ├── sessions.csv              # Workout history log
+│   ├── user_profile.json         # Profile (name, weight, targets)
+│   ├── diet_plans/               # Existing meal plans
+│   ├── intents.json              # Voice assistant intents
+│   ├── logs/                     # Debug/session logs
+│
+│── backend/                      # 🔗 API layer (already exists)
+│── models/                       # 🧠 ML/DL models (YOLO, pose, etc.)
+│── services/                     # 🛠 Background services
+│── tests/                        # ✅ Unit & integration tests
+│── Z_others/                     # 🗂 Experimental code, archives

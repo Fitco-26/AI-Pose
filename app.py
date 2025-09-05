@@ -34,7 +34,7 @@ def main():
         if not dumbbell_detected:
             cv2.putText(frame,
                         "⚠ Please pick up your dumbbell!",
-                        (50, 50),
+                        (25, 25),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         1,
                         (0, 0, 255), 3)
