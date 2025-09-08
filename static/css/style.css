@@ -1,0 +1,230 @@
+/* Global Reset & Body Styling */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent body scrollbars */
+  background-color: #0d0d0d; /* Match container background to avoid white flashes */
+}
+
+/* Root Layout */
+.container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  background: #0d0d0d;
+  font-family: "Poppins", sans-serif;
+  overflow: hidden;
+  padding: 10px; /* Add padding to create space for child borders */
+  box-sizing: border-box; /* Include padding in total width/height */
+  gap: 10px; /* Create a visual gap between the panels */
+}
+
+/* Camera Section - 70% initially */
+.camera-section {
+  flex: 7; /* Use flex-grow ratio */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #111;
+  border-right: 2px solid rgba(255, 255, 255, 0.1);
+  animation: fadeInLeft 0.8s ease;
+  position: relative;
+  overflow: hidden; /* important so the feed doesn’t spill */
+  border-radius: 12px; /* Round all 4 corners */
+  transition: flex 0.3s ease; /* Add smooth transition for flex changes */
+}
+
+.camera-section video,
+.camera-section img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* fills the panel without distortion */
+  border-radius: inherit; /* matches camera-section rounded corners */
+  box-shadow: 0 0 25px rgba(0, 255, 150, 0.2);
+  animation: smoothAppear 1s ease;
+  cursor: pointer;
+}
+
+/* Resizer */
+.resizer {
+  width: 5px;
+  cursor: col-resize;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: background 0.2s ease;
+}
+
+.resizer:hover {
+  background-color: rgba(0, 255, 150, 0.5);
+}
+
+/* States Section - 30% initially */
+.states-section {
+  flex: 3; /* Use flex-grow ratio */
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background: linear-gradient(180deg, #1c1c1c, #0f0f0f);
+  color: #fff;
+  overflow: hidden; /* Remove scrollbars */
+  animation: fadeInRight 0.8s ease;
+  border-radius: 12px; /* Round all 4 corners */
+  transition: flex 0.3s ease; /* Add smooth transition for flex changes */
+}
+
+/* Utility class to disable transition during active drag */
+.no-transition {
+  transition: none !important;
+}
+
+/* Heading inside stats */
+.states-section h2 {
+  font-size: 1.4rem;
+  margin-bottom: 15px;
+  font-weight: 600;
+  border-bottom: 2px solid rgba(0, 255, 150, 0.5);
+  padding-bottom: 8px;
+}
+
+/* Target Reps Input Styling */
+.target-reps-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  font-size: 1rem;
+}
+.target-reps-container label {
+  font-weight: 500;
+  color: #ccc;
+}
+.target-reps-container input {
+  width: 60px;
+  padding: 5px 8px;
+  background-color: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 1rem;
+  -webkit-appearance: none; /* Removes default spinner on some browsers */
+  margin: 0; /* Removes default margin on some browsers */
+}
+
+/* Stats Text Styling */
+.states-section p {
+  margin: 8px 0;
+  font-size: 1rem;
+  color: #ccc;
+}
+
+#reps, #stage {
+  font-size: 1.6rem; /* Larger font for key stats */
+  font-weight: 500;
+  color: #fff;
+  margin: 12px 0;
+  text-shadow: 0 0 5px rgba(0, 255, 150, 0.3); /* Subtle glow effect */
+}
+
+#warning {
+  font-weight: 600;
+  color: #ffcc00; /* A distinct warning color */
+  min-height: 1.2em; /* Prevent layout shift when warning appears/disappears */
+  font-size: 1.1rem;
+  margin: 10px 0;
+}
+
+/* Smooth Button Styling */
+button {
+  border: none;
+  font-weight: 600;
+  font-size: 1.1rem; /* Larger text */
+  padding: 20px 10px; /* More vertical padding for a square look */
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex: 1; /* Each button takes up equal space */
+  text-align: center;
+}
+
+button:hover {
+  transform: translateY(-2px) scale(1.05);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+/* Button Container */
+.button-container {
+  display: flex;
+  gap: 10px; /* Space between buttons */
+  margin-top: 20px; /* Space below the progress bar */
+}
+
+/* Start Button - Primary Action */
+#startButton {
+  background: linear-gradient(135deg, #00ff99, #00ccff);
+  color: #0d0d0d; /* Dark text on light background */
+  box-shadow: 0 4px 15px rgba(0, 255, 200, 0.2);
+}
+#startButton:hover {
+  box-shadow: 0 6px 20px rgba(0, 255, 200, 0.35);
+}
+
+/* Stop Button - Secondary/Destructive Action */
+#stopButton {
+  background: linear-gradient(135deg, #ff5f6d, #ff7c65);
+  color: #fff; /* Light text on dark background */
+  box-shadow: 0 4px 15px rgba(255, 95, 109, 0.3);
+}
+#stopButton:hover {
+  box-shadow: 0 6px 20px rgba(255, 95, 109, 0.4);
+}
+
+/* Animations */
+@keyframes fadeInLeft {
+  from { opacity: 0; transform: translateX(-50px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeInRight {
+  from { opacity: 0; transform: translateX(50px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes smoothAppear {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Fullscreen toggle */
+.camera-section.fullscreen {
+  flex: 1 1 100% !important;
+}
+.states-section.hidden {
+  display: none !important;
+}
+.resizer.hidden {
+  display: none !important;
+}
+
+/* Progress Bar Styling */
+progress {
+  width: 100%;
+  height: 18px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #222;
+  box-shadow: 0 0 5px rgba(0,255,150,0.2);
+}
+progress::-webkit-progress-bar {
+  background: #222;
+}
+progress::-webkit-progress-value {
+  background: linear-gradient(90deg, #00ff99, #00ccff);
+  border-radius: 8px;
+}
+progress::-moz-progress-bar {
+  background: linear-gradient(90deg, #00ff99, #00ccff);
+  border-radius: 8px;
+}

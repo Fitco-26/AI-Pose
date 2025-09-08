@@ -21,7 +21,7 @@ fitness_voice_assistant/
 │   │   ├── mistakes.py            # Mistake detection + curl counter
 │   │   └── utils/                 # Pose math helpers
 │   │       ├── angle_utils.py
-│   │       └── drawing_utils.py
+│   │       └── drawing_utils.py,weight_detection.py
 │   │
 │   └── __init__.py
 │

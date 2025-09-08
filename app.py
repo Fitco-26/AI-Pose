@@ -1,18 +1,198 @@
-import sys
-from PyQt5.QtWidgets import QApplication
-from ui.workout_screen import WorkoutScreen
+import numpy as np
+from flask import Flask, render_template, Response, jsonify, request
+import cv2
+from ultralytics import YOLO
+from modules.pose_detector import PoseDetector
+from modules.curl_counter import CurlCounter
+from modules.posture.utils.angle_utils import map_angle_to_progress
+import pyttsx3
+import threading
+import time
+import atexit
+
+app = Flask(__name__)
+
+# --- TTS Engine Setup ---
+tts_engine = pyttsx3.init()
 
 
-def main():
-    app = QApplication(sys.argv)
-    window = WorkoutScreen()
-    window.setWindowTitle("Fitness Assistant")
+def speak_async(text):
+    """Run TTS in a separate thread to avoid blocking the main app."""
+    def run():
+        tts_engine.say(text)
+        tts_engine.runAndWait()
+    thread = threading.Thread(target=run)
+    thread.start()
 
-    # Open window in maximized mode (with minimize, maximize, close buttons)
-    window.showMaximized()
 
-    sys.exit(app.exec_())
+# --- Initialize state ---
+cap = cv2.VideoCapture(0)
+detector = PoseDetector()
+counter = CurlCounter()
+yolo_model = YOLO("models/best.pt")
+
+is_workout_active = False
+
+# Store stats for AJAX polling
+stats = {
+    "left": 0,
+    "right": 0,
+    "total": 0,
+    "stage": "L- | R-",
+    "warning": "",
+    "progress": 0
+}
+
+# State for voice feedback
+last_spoken_feedback = ""
+last_spoken_time = 0
+FEEDBACK_COOLDOWN = 5  # seconds
+TARGET_REPS = 15
+last_spoken_rep = 0
+
+# --- Frame Generator ---
+
+
+# --- Frame Generator ---
+
+
+def generate_frames():
+    global stats, is_workout_active, last_spoken_feedback, last_spoken_time, last_spoken_rep
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        if not is_workout_active:
+            # Show raw paused frame
+            _, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            continue
+
+        # --- YOLO Dumbbell Detection ---
+        yolo_results = yolo_model(frame, verbose=False)
+        dumbbell_detected = any(len(r.boxes) > 0 for r in yolo_results)
+
+        form_warning = ""  # For form feedback
+
+        # --- Pose Detection ---
+        image, results = detector.detect(frame)
+        if results.pose_landmarks:
+            counter.process(image, results.pose_landmarks.landmark)
+            left, right = counter.left_counter, counter.right_counter
+            total = left + right
+            stats["left"], stats["right"], stats["total"] = left, right, total
+            stats["stage"] = f"L-{counter.left_stage or '-'} | R-{counter.right_stage or '-'}"
+
+            # Check for form feedback from the counter
+            feedbacks = [f for f in [
+                counter.left_feedback, counter.right_feedback] if f]
+            if feedbacks:
+                form_warning = " | ".join(sorted(feedbacks))
+
+            # --- Interactive Voice Trainer Logic ---
+            # Use the higher of the two rep counts as the primary
+            current_rep_count = max(left, right)
+            if current_rep_count > last_spoken_rep:
+                # Count the rep out loud
+                speak_async(str(current_rep_count))
+                last_spoken_rep = current_rep_count
+
+                # Give mid-set encouragement
+                if current_rep_count == round(TARGET_REPS / 2):
+                    speak_async("Halfway there, keep it up!")
+                elif current_rep_count == TARGET_REPS:
+                    speak_async("Great set! Take a rest.")
+
+            # Update progress
+            # We'll use the right arm for the progress bar for simplicity
+            stats["progress"] = map_angle_to_progress(counter.right_angle)
+
+        # Set the final warning message, prioritizing dumbbell detection
+        if not dumbbell_detected:
+            stats["warning"] = "⚠ Please pick up your dumbbell!"
+        else:
+            stats["warning"] = form_warning
+            # --- Voice Feedback Logic ---
+            current_time = time.time()
+            # Speak if there's a new warning, or if the same warning persists after the cooldown
+            should_speak = form_warning and (form_warning != last_spoken_feedback or (
+                current_time - last_spoken_time > FEEDBACK_COOLDOWN))
+            if should_speak:
+                speak_async(form_warning)
+                last_spoken_feedback = form_warning
+                last_spoken_time = current_time
+            elif not form_warning and last_spoken_feedback:
+                last_spoken_feedback = ""  # Reset when form is good
+
+        # detector.draw_landmarks(image, results) # Removed to keep the feed clean
+
+        # Encode frame for streaming
+        _, buffer = cv2.imencode('.jpg', image)
+        frame = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+
+# --- Routes ---
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/stats')
+def get_stats():
+    return jsonify(stats)
+
+
+@app.route('/start', methods=['POST'])
+def start_workout():
+    global is_workout_active, counter, stats, last_spoken_feedback, last_spoken_time, last_spoken_rep
+    is_workout_active = True
+    # Reset counters & stats at workout start
+    counter = CurlCounter()
+    stats = {"left": 0, "right": 0, "total": 0,
+             "stage": "L- | R-", "warning": "", "progress": 0}
+    last_spoken_feedback = ""
+    last_spoken_time = 0
+    last_spoken_rep = 0
+    speak_async(f"Let's go for {TARGET_REPS} reps. Starting now.")
+    return jsonify({"status": "Workout started"})
+
+
+@app.route('/stop', methods=['POST'])
+def stop_workout():
+    global is_workout_active
+    is_workout_active = False
+    return jsonify({"status": "Workout stopped"})
+
+
+@app.route('/set_target_reps', methods=['POST'])
+def set_target_reps():
+    global TARGET_REPS, last_spoken_rep
+    data = request.get_json()
+    new_target = data.get('target')
+    if new_target and int(new_target) > 0:
+        TARGET_REPS = int(new_target)
+        last_spoken_rep = 0  # Reset rep count to avoid confusion
+    return jsonify({"status": "Target updated", "new_target": TARGET_REPS})
+
+# --- Cleanup ---
+
+
+@atexit.register
+def cleanup():
+    cap.release()
+    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    main()
+    app.run(debug=True)

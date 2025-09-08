@@ -9,3 +9,7 @@ to covert back to above command -> git push -u origin main
 
 #To run train model
 yolo task=detect mode=train model=runs/detect/train3/weights/last.pt data=dumbbell_dataset/data.yaml epochs=30
+
+
+#to start flask
+http://127.0.0.1:5000/
