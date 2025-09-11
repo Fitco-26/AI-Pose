@@ -25,6 +25,12 @@ def speak_async(text):
     thread.start()
 
 
+# --- Thread-safe Global State & Processing ---
+frame_lock = threading.Lock()
+latest_frame = None  # This will hold the latest processed frame (as bytes)
+is_processing_thread_running = True
+
+
 # --- Initialize state ---
 cap = cv2.VideoCapture(0)
 detector = PoseDetector()
