@@ -15,3 +15,8 @@ Provides standardized front, side, and selfie photos for hundreds of individuals
 containing BMI, weight, height, hip circumference, and body-fat relevant features.
 Facilitates category and regression models (e.g., “slim,” “average,” “fat”).
 LINK : https://huggingface.co/datasets/UniqueData/body-measurements-dataset
+
+
+
+
+Can we add a feature to save the workout summary (total reps, duration) to a file when I press the 'Stop' button?

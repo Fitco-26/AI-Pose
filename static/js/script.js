@@ -20,11 +20,21 @@ function updateStats() {
   fetch("/stats")
     .then((res) => res.json())
     .then((data) => {
+      const warningEl = document.getElementById("warning");
+
       document.getElementById("reps").innerText = `Left: ${data.left} | Right: ${
         data.right
       } | Total: ${data.total}`;
       document.getElementById("stage").innerText = `Stage: ${data.stage}`;
-      document.getElementById("warning").innerText = data.warning;
+      warningEl.innerText = data.warning;
+
+      // Handle workout completion state
+      if (data.workout_complete) {
+        warningEl.style.color = "#00ff99"; // Success green
+      } else {
+        warningEl.style.color = ""; // Revert to default CSS color
+      }
+
       // Set the target for our animation, don't update the bar directly
       targetProgress = data.progress;
     });

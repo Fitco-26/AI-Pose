@@ -88,7 +88,7 @@ def generate_frames():
         if results.pose_landmarks:
             counter.process(image, results.pose_landmarks.landmark)
             left, right = counter.left_counter, counter.right_counter
-            total = left + right
+            total = min(left, right)
             stats["left"], stats["right"], stats["total"] = left, right, total
             stats["stage"] = f"L-{counter.left_stage or '-'} | R-{counter.right_stage or '-'}"
 
@@ -102,7 +102,6 @@ def generate_frames():
             # Use the higher of the two rep counts as the primary
             current_rep_count = max(left, right)
             if current_rep_count > last_spoken_rep:
-                # Count the rep out loud
                 speak_async(str(current_rep_count))
                 last_spoken_rep = current_rep_count
 
@@ -112,12 +111,24 @@ def generate_frames():
                 elif current_rep_count == TARGET_REPS:
                     speak_async("Great set! Take a rest.")
 
+            # --- Target Reps Hit Logic ---
+            if total >= TARGET_REPS and is_workout_active:
+                is_workout_active = False  # Stop the workout
+                stats["workout_complete"] = True
+                stats["warning"] = stats["target_hit_message"]
+                speak_async(stats["target_hit_message"])
+                continue
+                # Continue to next loop iteration to immediately show paused frame
+
             # Update progress
             # We'll use the right arm for the progress bar for simplicity
             stats["progress"] = map_angle_to_progress(counter.right_angle)
 
         # Set the final warning message, prioritizing dumbbell detection
-        if not dumbbell_detected:
+        # Do not overwrite the "workout_complete" message
+        if stats.get("workout_complete"):
+            pass
+        elif not dumbbell_detected:
             stats["warning"] = "⚠ Please pick up your dumbbell!"
         else:
             stats["warning"] = form_warning
@@ -166,7 +177,8 @@ def start_workout():
     # Reset counters & stats at workout start
     counter = CurlCounter()
     stats = {"left": 0, "right": 0, "total": 0,
-             "stage": "L- | R-", "warning": "", "progress": 0}
+             "stage": "L- | R-", "warning": "", "progress": 0,
+             "workout_complete": False, "target_hit_message": "Target Hit! Great job! Take a rest."}
     last_spoken_feedback = ""
     last_spoken_time = 0
     last_spoken_rep = 0
