@@ -21,7 +21,7 @@ The app counts your curls, tracks progress, and gives voice guidance.
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/fitness_voice_assistant.git
+git clone https://github.com/Fitco-26/AI-Pose.git
 cd fitness_voice_assistant
 
 # Install Dependencies
