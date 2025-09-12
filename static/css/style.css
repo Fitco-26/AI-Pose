@@ -228,3 +228,32 @@ progress::-moz-progress-bar {
   background: linear-gradient(90deg, #00ff99, #00ccff);
   border-radius: 8px;
 }
+
+/* Error Log Styling */
+#errorLogContainer {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: rgba(255, 204, 0, 0.1); /* Faint yellow background */
+  border-radius: 8px;
+  border-left: 4px solid #ffcc00; /* Yellow accent border */
+  min-height: 50px;
+  max-height: 150px; /* Set a maximum height */
+  overflow-y: auto; /* Add vertical scrollbar only when content overflows */
+}
+
+#errorLog {
+  color: #ffcc00; /* Yellow text */
+  font-size: 0.9rem;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* Utility class to hide elements */
+.hidden {
+  display: none;
+}
+
+.no-feedback {
+  color: #888; /* A dimmer color for the placeholder text */
+  font-style: italic;
+}

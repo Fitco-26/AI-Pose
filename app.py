@@ -46,7 +46,8 @@ stats = {
     "total": 0,
     "stage": "L- | R-",
     "warning": "",
-    "progress": 0
+    "progress": 0,
+    "error_log": []
 }
 
 # State for voice feedback
@@ -99,6 +100,15 @@ def generate_frames():
                 form_warning = " | ".join(sorted(feedbacks))
 
             # --- Interactive Voice Trainer Logic ---
+            # Log errors with rep context
+            if counter.new_error_logged:
+                error_side, error_msg = counter.last_error
+                # The rep number when the error occurred
+                rep_at_error = (stats[error_side] + 1)
+                stats["error_log"].append(
+                    f"At Rep {rep_at_error} ({error_side.capitalize()}): {error_msg}")
+                counter.new_error_logged = False  # Reset flag
+
             # Use the higher of the two rep counts as the primary
             current_rep_count = max(left, right)
             if current_rep_count > last_spoken_rep:
@@ -177,7 +187,7 @@ def start_workout():
     # Reset counters & stats at workout start
     counter = CurlCounter()
     stats = {"left": 0, "right": 0, "total": 0,
-             "stage": "L- | R-", "warning": "", "progress": 0,
+             "stage": "L- | R-", "warning": "", "progress": 0, "error_log": [],
              "workout_complete": False, "target_hit_message": "Target Hit! Great job! Take a rest."}
     last_spoken_feedback = ""
     last_spoken_time = 0

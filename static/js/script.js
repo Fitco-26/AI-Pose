@@ -20,6 +20,8 @@ function updateStats() {
   fetch("/stats")
     .then((res) => res.json())
     .then((data) => {
+      const errorLogContainer = document.getElementById("errorLogContainer");
+      const errorLogEl = document.getElementById("errorLog");
       const warningEl = document.getElementById("warning");
 
       document.getElementById("reps").innerText = `Left: ${data.left} | Right: ${
@@ -28,9 +30,20 @@ function updateStats() {
       document.getElementById("stage").innerText = `Stage: ${data.stage}`;
       warningEl.innerText = data.warning;
 
+      // --- Live Error Log Update ---
+      // This section now runs on every update, not just at the end.
+      if (data.error_log && data.error_log.length > 0) {
+        errorLogEl.innerHTML = "<strong>Form Feedback:</strong><br>" + data.error_log.join("<br>");
+      } else {
+        // If the log is empty but the container is visible (i.e., workout started), show the default message.
+        if (!errorLogContainer.classList.contains("hidden")) {
+            errorLogEl.innerHTML = "<strong>Form Feedback:</strong><br><span class='no-feedback'>No feedback yet. Keep up the great form!</span>";
+        }
+      }
+
       // Handle workout completion state
       if (data.workout_complete) {
-        warningEl.style.color = "#00ff99"; // Success green
+        warningEl.style.color = "#00ff99"; // Success green for the main message
       } else {
         warningEl.style.color = ""; // Revert to default CSS color
       }
@@ -48,6 +61,12 @@ requestAnimationFrame(animateProgressBar);
 setInterval(updateStats, 250);
 
 function startWorkout() {
+    // Make the error log container visible and set its initial state.
+    const errorLogContainer = document.getElementById("errorLogContainer");
+    const errorLogEl = document.getElementById("errorLog");
+    errorLogContainer.classList.remove("hidden");
+    errorLogEl.innerHTML = "<strong>Form Feedback:</strong><br><span class='no-feedback'>No feedback yet. Keep up the great form!</span>";
+
     fetch('/start', { method: "POST" });
 }
 function stopWorkout() {
