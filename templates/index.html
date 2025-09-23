@@ -8,6 +8,21 @@
     />
   </head>
   <body>
+    <!-- Intro Video Overlay -->
+    <div id="introVideoOverlay" class="video-overlay">
+      <!-- Assuming your video is in 'static/videos/intro.mp4' -->
+      <video
+        id="introVideo"
+        src="{{ url_for('static', filename='Video/Video_Refinement_Request (1).mp4') }}"
+        preload="auto"
+        autoplay
+        muted
+        loop
+      ></video>
+      <button id="skipIntroButton" class="intro-skip-button">Skip Intro</button>
+    </div>
+
+    <!-- Main App Container -->
     <div class="container">
       <!-- Camera -->
       <div class="camera-section" id="videoPanel">
@@ -29,7 +44,7 @@
         <p id="warning"></p>
         <progress id="progress" value="0" max="100"></progress>
         <div class="button-container">
-          <button id="startButton" onclick="startWorkout()">Start</button>
+          <button id="startButton">Start</button>
           <button id="stopButton" onclick="stopWorkout()">Stop</button>
         </div>
         <!-- Error Log Section -->

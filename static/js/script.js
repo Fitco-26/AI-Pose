@@ -60,6 +60,12 @@ requestAnimationFrame(animateProgressBar);
 // The animation loop will handle the smoothing
 setInterval(updateStats, 250);
 
+// --- Workout Control ---
+const introOverlay = document.getElementById("introVideoOverlay");
+const introVideo = document.getElementById("introVideo");
+const startButton = document.getElementById("startButton");
+const skipIntroButton = document.getElementById("skipIntroButton");
+
 function startWorkout() {
     // Make the error log container visible and set its initial state.
     const errorLogContainer = document.getElementById("errorLogContainer");
@@ -67,12 +73,30 @@ function startWorkout() {
     errorLogContainer.classList.remove("hidden");
     errorLogEl.innerHTML = "<strong>Form Feedback:</strong><br><span class='no-feedback'>No feedback yet. Keep up the great form!</span>";
 
+    // Start the actual workout on the backend
     fetch('/start', { method: "POST" });
+
+    // Show the intro video overlay
+    // This is no longer needed here, as the video shows on page load.
 }
+
+function hideIntro() {
+    // Hide the overlay and stop the video
+    introOverlay.classList.add("hidden");
+    introVideo.pause();
+}
+
 function stopWorkout() {
     fetch('/stop', { method: "POST" });
 }
 
+// Event Listeners for the intro video
+startButton.addEventListener('click', startWorkout);
+skipIntroButton.addEventListener('click', hideIntro);
+// The 'ended' event listener is removed because the video now loops.
+
+
+// --- Target Reps ---
 const targetRepsInput = document.getElementById("targetRepsInput");
 
 targetRepsInput.addEventListener('change', (event) => {

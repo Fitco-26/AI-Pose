@@ -249,11 +249,50 @@ progress::-moz-progress-bar {
 }
 
 /* Utility class to hide elements */
+/* Use opacity and pointer-events for hiding to keep elements in the DOM */
 .hidden {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease; /* Add a fade-out transition */
 }
 
 .no-feedback {
   color: #888; /* A dimmer color for the placeholder text */
   font-style: italic;
+}
+
+/* --- Intro Video Overlay --- */
+.video-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.9);
+  z-index: 1000; /* Ensure it's on top of everything */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 20px; 
+  animation: smoothAppear 0.5s ease;
+}
+
+#introVideo {
+  width: 80%;
+  max-width: 960px; /* Limit video size on large screens */
+  border-radius: 12px;
+  box-shadow: 0 0 30px rgba(0, 255, 150, 0.2);
+}
+
+.intro-skip-button {
+  background: linear-gradient(135deg, #ff5f6d, #ff7c65);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(255, 95, 109, 0.3);
+  padding: 15px 30px; /* Specific padding */
+  flex: 0; /* Don't grow */
+}
+
+.intro-skip-button:hover {
+  box-shadow: 0 6px 20px rgba(255, 95, 109, 0.4);
 }
