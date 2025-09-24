@@ -161,6 +161,11 @@ button:active {
   margin-top: 20px; /* Space below the progress bar */
 }
 
+.dashboard-button-container {
+  margin-top: auto; /* Pushes this to the bottom of the flex container */
+  padding-top: 20px; /* Add some space above it */
+}
+
 /* Start Button - Primary Action */
 #startButton {
   background: linear-gradient(135deg, #00ff99, #00ccff);
@@ -179,6 +184,16 @@ button:active {
 }
 #stopButton:hover {
   box-shadow: 0 6px 20px rgba(255, 95, 109, 0.4);
+}
+
+/* Dashboard Button - Neutral/Info Action */
+#dashboardButton {
+  background: linear-gradient(135deg, #434343, #222222);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+#dashboardButton:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
 /* Animations */

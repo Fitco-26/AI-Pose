@@ -8,7 +8,10 @@ from modules.posture.utils.angle_utils import map_angle_to_progress
 import pyttsx3
 import threading
 import time
+from datetime import datetime
 import atexit
+import csv
+import os
 
 app = Flask(__name__)
 
@@ -56,6 +59,10 @@ last_spoken_time = 0
 FEEDBACK_COOLDOWN = 5  # seconds
 TARGET_REPS = 15
 last_spoken_rep = 0
+workout_start_time = None
+
+# --- History File ---
+HISTORY_FILE = 'data/workout_history.csv'
 
 # --- Frame Generator ---
 
@@ -165,14 +172,33 @@ def generate_frames():
 
 # --- Routes ---
 @app.route('/')
-def index():
-    return render_template('index.html')
+def dashboard():
+    return render_template('dashboard.html')
+
+
+@app.route('/workout')
+def workout():
+    # This was the old index.html
+    return render_template('workout.html')
 
 
 @app.route('/video_feed')
 def video_feed():
     return Response(generate_frames(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/history')
+def history():
+    history_data = []
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, 'r', newline='') as f:
+            reader = csv.DictReader(f)
+            # Reverse the list to show the most recent workouts first
+            history_data = sorted(
+                list(reader), key=lambda x: x['timestamp'], reverse=True)
+
+    return render_template('history.html', history=history_data)
 
 
 @app.route('/stats')
@@ -182,7 +208,8 @@ def get_stats():
 
 @app.route('/start', methods=['POST'])
 def start_workout():
-    global is_workout_active, counter, stats, last_spoken_feedback, last_spoken_time, last_spoken_rep
+    global is_workout_active, counter, stats, last_spoken_feedback, last_spoken_time, last_spoken_rep, workout_start_time
+    workout_start_time = time.time()
     is_workout_active = True
     # Reset counters & stats at workout start
     counter = CurlCounter()
@@ -198,8 +225,32 @@ def start_workout():
 
 @app.route('/stop', methods=['POST'])
 def stop_workout():
-    global is_workout_active
+    global is_workout_active, workout_start_time, stats
     is_workout_active = False
+
+    if workout_start_time:
+        duration = time.time() - workout_start_time
+        total_reps = stats.get('total', 0)
+        exercise_name = "Bicep Curls"
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Ensure data directory exists
+        os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+
+        # Write to CSV
+        file_exists = os.path.isfile(HISTORY_FILE)
+        with open(HISTORY_FILE, 'a', newline='') as f:
+            writer = csv.writer(f)
+            # Write header if file is new
+            if not file_exists:
+                writer.writerow(
+                    ['timestamp', 'exercise', 'reps', 'duration_seconds'])
+            # Write workout data
+            writer.writerow([timestamp, exercise_name,
+                            total_reps, round(duration)])
+
+        workout_start_time = None  # Reset start time
+
     return jsonify({"status": "Workout stopped"})
 
 
@@ -213,6 +264,31 @@ def set_target_reps():
         last_spoken_rep = 0  # Reset rep count to avoid confusion
     return jsonify({"status": "Target updated", "new_target": TARGET_REPS})
 
+
+@app.route('/delete_entry', methods=['POST'])
+def delete_entry():
+    data = request.get_json()
+    timestamp_to_delete = data.get('timestamp')
+
+    if not timestamp_to_delete or not os.path.exists(HISTORY_FILE):
+        return jsonify({"status": "error", "message": "Invalid request or file not found"}), 400
+
+    # Read all entries except the one to be deleted
+    updated_history = []
+    with open(HISTORY_FILE, 'r', newline='') as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        for row in reader:
+            if row['timestamp'] != timestamp_to_delete:
+                updated_history.append(row)
+
+    # Rewrite the CSV file with the updated history
+    with open(HISTORY_FILE, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(updated_history)
+
+    return jsonify({"status": "success", "message": "Entry deleted"})
 # --- Cleanup ---
 
 

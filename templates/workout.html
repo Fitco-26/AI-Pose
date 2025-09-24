@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Workout Tracker</title>
+    <title>Bicep Curl Tracker</title>
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='css/style.css') }}"
@@ -50,6 +50,12 @@
         <!-- Error Log Section -->
         <div id="errorLogContainer" class="hidden">
           <div id="errorLog"></div>
+        </div>
+        <!-- Dashboard Button -->
+        <div class="button-container dashboard-button-container">
+          <button id="dashboardButton" onclick="location.href='/'">
+            Back to Dashboard
+          </button>
         </div>
       </div>
     </div>
