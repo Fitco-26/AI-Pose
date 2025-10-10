@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Fitness Dashboard</title>
+    <!-- Fonts and Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/feather-icons"></script>
+    <!-- Main Stylesheet -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/new_dashboard_style.css') }}"
+    />
+    <!-- Chart.js for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="dashboard-wrapper">
+      <!-- ==== Sidebar Navigation ==== -->
+      <nav class="sidebar">
+        <div class="sidebar-header">
+          <i data-feather="activity"></i>
+          <span>FitCo</span>
+        </div>
+        <ul class="sidebar-links">
+          <li class="active">
+            <a href="{{ url_for('dashboard') }}"
+              ><i data-feather="grid"></i><span>Dashboard</span></a
+            >
+          </li>
+          <li>
+            <a href="{{ url_for('select_exercise') }}"
+              ><i data-feather="video"></i><span>Workouts</span></a
+            >
+          </li>
+          <li>
+            <a href="{{ url_for('history') }}"
+              ><i data-feather="clock"></i><span>History</span></a
+            >
+          </li>
+          <li>
+            <a href="#"><i data-feather="settings"></i><span>Settings</span></a>
+          </li>
+        </ul>
+        <div class="sidebar-footer">
+          <a href="#"><i data-feather="user"></i><span>Profile</span></a>
+          <a href="#"><i data-feather="log-out"></i><span>Logout</span></a>
+        </div>
+      </nav>
+
+      <!-- ==== Main Content ==== -->
+      <main class="main-content">
+        <!-- Main Header -->
+        <header class="main-header">
+          <div class="header-greeting">
+            <h1>Welcome Back, Alex!</h1>
+            <p>Let's crush your goals today.</p>
+          </div>
+          <div class="header-actions">
+            <div class="theme-toggle">
+              <i data-feather="sun" class="sun"></i>
+              <label class="switch">
+                <input type="checkbox" id="theme-toggle-checkbox" checked />
+                <span class="slider"></span>
+              </label>
+              <i data-feather="moon" class="moon"></i>
+            </div>
+          </div>
+        </header>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+          <!-- Profile Card -->
+          <div class="card profile-card">
+            <div class="profile-header">
+              <img
+                src="https://i.pravatar.cc/150?u=alex"
+                alt="User"
+                class="profile-avatar"
+              />
+              <div class="profile-info">
+                <h2>Alex Johnson</h2>
+                <p>Fitness Goal: Build Muscle</p>
+              </div>
+            </div>
+            <div class="profile-stats">
+              <div class="stat-item">
+                <span>Level</span>
+                <strong>Intermediate</strong>
+              </div>
+              <div class="stat-item">
+                <span>Workouts</span>
+                <strong>12</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Workout Summary -->
+          <div class="card workout-summary-card">
+            <h3>Live Workout Summary</h3>
+            <div class="summary-grid">
+              <div class="summary-item">
+                <i data-feather="repeat"></i><span>Total Reps</span>
+                <strong id="summary-reps">0</strong>
+              </div>
+              <div class="summary-item">
+                <i data-feather="layers"></i><span>Sets</span>
+                <strong id="summary-sets">0</strong>
+              </div>
+              <div class="summary-item">
+                <i data-feather="clock"></i><span>Duration</span>
+                <strong id="summary-duration">0s</strong>
+              </div>
+              <div class="summary-item">
+                <i data-feather="zap"></i><span>Calories</span>
+                <strong id="summary-calories">0</strong>
+              </div>
+            </div>
+            <div class="progress-bar-container">
+              <div
+                id="summary-progress-bar"
+                class="progress-bar"
+                style="width: 0%"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Analytics Charts -->
+          <div class="card chart-card">
+            <h3>Weekly Progress</h3>
+            <canvas id="weeklyProgressChart"></canvas>
+          </div>
+
+          <!-- Accuracy Ring -->
+          <div class="card accuracy-card">
+            <h3>Exercise Accuracy</h3>
+            <div class="progress-ring">
+              <svg class="progress-ring-svg">
+                <circle
+                  class="progress-ring-circle-bg"
+                  cx="80"
+                  cy="80"
+                  r="70"
+                ></circle>
+                <circle
+                  class="progress-ring-circle"
+                  cx="80"
+                  cy="80"
+                  r="70"
+                  style="--value: 0"
+                ></circle>
+              </svg>
+              <div id="accuracy-text" class="progress-ring-text">0%</div>
+            </div>
+          </div>
+
+          <!-- Workout History Table -->
+          <div class="card history-card">
+            <h3>Workout History</h3>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Exercise</th>
+                    <th>Reps</th>
+                    <th>Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% if history %} {% for entry in history[:5] %} {# Show latest
+                  5 entries #}
+                  <tr>
+                    <td>{{ entry.timestamp.split(' ')[0] }}</td>
+                    <td>{{ entry.exercise }}</td>
+                    <td>{{ entry.reps }}</td>
+                    <td>{{ (entry.duration_seconds | int // 60) }} min</td>
+                  </tr>
+                  {% endfor %} {% else %}
+                  <tr>
+                    <td colspan="4" style="text-align: center">
+                      No workout history yet.
+                    </td>
+                  </tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/new_dashboard_script.js') }}"></script>
+  </body>
+</html>

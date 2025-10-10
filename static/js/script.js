@@ -67,6 +67,11 @@ const startButton = document.getElementById("startButton");
 const skipIntroButton = document.getElementById("skipIntroButton");
 
 function startWorkout() {
+    // Hide intro overlay if it's still visible, so the user sees the action start.
+    if (!introOverlay.classList.contains("hidden")) {
+        hideIntro();
+    }
+
     // Make the error log container visible and set its initial state.
     const errorLogContainer = document.getElementById("errorLogContainer");
     const errorLogEl = document.getElementById("errorLog");
@@ -75,25 +80,23 @@ function startWorkout() {
 
     // Start the actual workout on the backend
     fetch('/start', { method: "POST" });
-
-    // Show the intro video overlay
-    // This is no longer needed here, as the video shows on page load.
 }
 
 function hideIntro() {
     // Hide the overlay and stop the video
     introOverlay.classList.add("hidden");
     introVideo.pause();
+    introVideo.currentTime = 0; // Reset video for next time
 }
 
 function stopWorkout() {
     fetch('/stop', { method: "POST" });
 }
 
-// Event Listeners for the intro video
+// Event Listeners for the intro video and workout controls
 startButton.addEventListener('click', startWorkout);
 skipIntroButton.addEventListener('click', hideIntro);
-// The 'ended' event listener is removed because the video now loops.
+introVideo.addEventListener('ended', hideIntro); // Auto-hide when video ends
 
 
 // --- Target Reps ---

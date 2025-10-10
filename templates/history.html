@@ -107,16 +107,34 @@
 
       {% if history %}
       <div class="search-container">
-        <input type="text" id="searchInput" placeholder="Filter by exercise name...">
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="Filter by exercise name..."
+        />
       </div>
 
       <table class="history-table">
         <thead>
           <tr>
-            <th class="sortable-header" data-sort-col="0" data-sort-dir="desc">Date & Time <span class="sort-indicator">▼</span></th>
+            <th class="sortable-header" data-sort-col="0" data-sort-dir="desc">
+              Date & Time <span class="sort-indicator">▼</span>
+            </th>
             <th>Exercise</th>
-            <th class="sortable-header" data-sort-col="2" data-sort-type="number">Total Reps <span class="sort-indicator"></span></th>
-            <th class="sortable-header" data-sort-col="3" data-sort-type="number">Duration (seconds) <span class="sort-indicator"></span></th>
+            <th
+              class="sortable-header"
+              data-sort-col="2"
+              data-sort-type="number"
+            >
+              Total Reps <span class="sort-indicator"></span>
+            </th>
+            <th
+              class="sortable-header"
+              data-sort-col="3"
+              data-sort-type="number"
+            >
+              Duration (seconds) <span class="sort-indicator"></span>
+            </th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -127,7 +145,11 @@
             <td>{{ entry.exercise }}</td>
             <td>{{ entry.reps }}</td>
             <td>{{ entry.duration_seconds }}</td>
-            <td><button class="delete-btn" data-timestamp="{{ entry.timestamp }}">Delete</button></td>
+            <td>
+              <button class="delete-btn" data-timestamp="{{ entry.timestamp }}">
+                Delete
+              </button>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -247,21 +269,22 @@
             });
         }
 
-      });
-    </script>
-  </body>
-</html>
-                return newDir === "asc" ? 1 : -1;
-              }
-              return 0;
-            });
+        // --- Auto-filter from URL parameter ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const exerciseFilter = urlParams.get('exercise');
 
-            // Re-append sorted rows
-            rows.forEach((row) => {
-              tbody.appendChild(row);
+        if (exerciseFilter && searchInput) {
+            // Set the search input value to the exercise from the URL
+            searchInput.value = exerciseFilter;
+
+            // Create and dispatch a 'keyup' event to trigger the filter
+            const event = new KeyboardEvent('keyup', {
+                'bubbles': true,
+                'cancelable': true
             });
-          });
-        });
+            searchInput.dispatchEvent(event);
+        }
+      });
       });
     </script>
   </body>
