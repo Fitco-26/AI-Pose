@@ -27,6 +27,8 @@ cd AI-Pose
 # Install Dependencies
 pip install -r requirements.txt
 
+> **Windows Users:** If you encounter an `ImportError` related to `_framework_bindings` or `DLL load failed`, you need to install the Microsoft C++ Redistributable. Download and run the installer for `X64` under the "Visual Studio 2015, 2017, 2019, and 2022" section.
+
 # Start the app:
 python app.py
 ```

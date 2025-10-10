@@ -79,11 +79,14 @@ def generate_frames():
 
         if not is_workout_active:
             # Show raw paused frame
-            _, buffer = cv2.imencode('.jpg', frame)
-            frame = buffer.tobytes()
+            # Flip the frame for display in paused state
+            flipped_frame = cv2.flip(frame, 1)
+            _, buffer = cv2.imencode('.jpg', flipped_frame)
             yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
             continue
+
+        # --- Processing (YOLO, Pose Detection, Counter) happens on the original, unflipped frame ---
 
         # --- YOLO Dumbbell Detection ---
         yolo_results = yolo_model(frame, verbose=False)
@@ -161,8 +164,10 @@ def generate_frames():
             elif not form_warning and last_spoken_feedback:
                 last_spoken_feedback = ""  # Reset when form is good
 
-        # detector.draw_landmarks(image, results) # Removed to keep the feed clean
+        # detector.draw_landmarks(image, results) # Removed to keep the feed clean (as per original code)
 
+        # Flip the final processed image horizontally for mirror display to the user
+        image = cv2.flip(image, 1)
         # Encode frame for streaming
         _, buffer = cv2.imencode('.jpg', image)
         frame = buffer.tobytes()
