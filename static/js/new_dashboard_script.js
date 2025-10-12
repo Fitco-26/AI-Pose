@@ -55,58 +55,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Fetch data every second for real-time updates
-  setInterval(updateDashboard, 1000);
+  setInterval(updateDashboard, 2000); // Reduced frequency to 2s for efficiency
   // Initial call to populate data immediately on page load
   updateDashboard();
 
-  // --- Chart.js Implementation ---
-  const chartOptions = {
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false,
-      },
-    },
-    scales: {
-      x: {
-        ticks: { color: "#8a8a8a" },
-        grid: { color: "rgba(255, 255, 255, 0.1)" },
-      },
-      y: {
-        ticks: { color: "#8a8a8a" },
-        grid: { color: "rgba(255, 255, 255, 0.1)" },
-        beginAtZero: true,
-      },
-    },
-  };
-
-  function initializeCharts() {
-    fetch("/chart_data")
-      .then(res => res.json())
-      .then(chartData => {
-        // --- Weekly Progress Chart (Bar) ---
-        const weeklyCtx = document.getElementById("weeklyProgressChart");
-        if (weeklyCtx && chartData.weekly_progress) {
-          new Chart(weeklyCtx, {
-            type: "bar",
-            data: {
-              labels: chartData.weekly_progress.labels,
-              datasets: [
-                {
-                  label: "Workout Duration (min)",
-                  data: chartData.weekly_progress.data,
-                  backgroundColor: "#00ccff",
-                  borderRadius: 6,
-                },
-              ],
-            },
-            options: chartOptions,
-          });
-        }
-      })
-      .catch(error => console.error("Error fetching chart data:", error));
-  }
-
-  // Load the charts with dynamic data
-  initializeCharts();
 });

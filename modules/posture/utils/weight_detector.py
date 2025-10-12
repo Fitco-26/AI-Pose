@@ -1,9 +1,12 @@
 import cv2
 from ultralytics import YOLO
+import torch
 
+# Explicitly set the device to leverage GPU if available.
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # Load YOLOv8 small pretrained model
 # small, fast; can switch to yolov8s.pt for more accuracy
-model = YOLO("yolov8n.pt")
+model = YOLO("yolov8n.pt").to(device)
 
 
 def detect_weight(frame, wrist_coords):

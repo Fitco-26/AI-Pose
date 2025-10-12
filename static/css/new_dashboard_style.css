@@ -319,7 +319,14 @@ input:checked + .slider:before { transform: translateX(24px); }
 
 .chart-card {
   grid-column: span 2;
-  min-height: 300px;
+  min-height: 350px; /* Slightly increase min-height for better proportions */
+  display: flex; /* Use flexbox to control child elements */
+  flex-direction: column; /* Stack children vertically */
+}
+
+.chart-card canvas {
+  flex-grow: 1; /* Allow the canvas to grow and fill the available space */
+  min-height: 0; /* Important for flex-grow to work correctly in some browsers */
 }
 
 .accuracy-card {

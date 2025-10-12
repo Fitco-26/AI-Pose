@@ -117,7 +117,7 @@ class CurlCounter:
                 feedback = "Too Fast!"
                 form_fault = True
 
-            if form_fault and feedback and not self.last_error[1] == feedback:
+            if form_fault and feedback and self.last_error[1] != feedback:
                 self.last_error = (arm_side, feedback)
                 self.new_error_logged = True
 

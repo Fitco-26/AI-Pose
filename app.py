@@ -1,14 +1,16 @@
+import torch
 import numpy as np
-from flask import Flask, render_template, Response, jsonify, request
+from flask import Flask, render_template, Response, jsonify, request, redirect, url_for
 import cv2
 from ultralytics import YOLO
 from modules.pose_detector import PoseDetector
 from modules.curl_counter import CurlCounter
 from modules.posture.utils.angle_utils import map_angle_to_progress
+import mediapipe as mp
 import pyttsx3
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import atexit
 import csv
 import os
@@ -62,7 +64,10 @@ atexit.register(release_camera)
 # --- Initialize state ---
 detector = PoseDetector()
 counter = CurlCounter()
-yolo_model = YOLO("models/best.pt")
+# Explicitly set the device for YOLO. It will use GPU if available, otherwise CPU.
+# This ensures you're leveraging the GPU when possible.
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+yolo_model = YOLO("models/best.pt").to(device)
 is_workout_active = False
 current_exercise = None  # To store the selected exercise
 
@@ -87,6 +92,27 @@ workout_start_time = None
 
 # --- History File ---
 HISTORY_FILE = 'data/workout_history.csv'
+
+# --- Landmark Visibility Check ---
+
+
+def are_landmarks_visible(landmarks, visibility_threshold=0.7):
+    """Checks if essential landmarks for bicep curls are visible."""
+    # Define the essential landmarks for bicep curls
+    required_landmarks = [
+        mp.solutions.pose.PoseLandmark.LEFT_SHOULDER,
+        mp.solutions.pose.PoseLandmark.LEFT_ELBOW,
+        mp.solutions.pose.PoseLandmark.LEFT_WRIST,
+        mp.solutions.pose.PoseLandmark.LEFT_HIP,
+        mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER,
+        mp.solutions.pose.PoseLandmark.RIGHT_ELBOW,
+        mp.solutions.pose.PoseLandmark.RIGHT_WRIST,
+        mp.solutions.pose.PoseLandmark.RIGHT_HIP,
+    ]
+    for landmark_index in required_landmarks:
+        if landmarks.landmark[landmark_index.value].visibility < visibility_threshold:
+            return False
+    return True
 
 # --- Frame Generator ---
 
@@ -125,7 +151,12 @@ def generate_frames():
 
                 # --- Pose Detection ---
                 processed_image, results = detector.detect(processed_image)
-                if results.pose_landmarks:
+                landmarks_visible = results.pose_landmarks and are_landmarks_visible(
+                    results.pose_landmarks)
+
+                if landmarks_visible:
+                    # Only process if the user is fully visible
+
                     counter.process(processed_image,
                                     results.pose_landmarks.landmark)
                     left, right = counter.left_counter, counter.right_counter
@@ -166,6 +197,8 @@ def generate_frames():
                     stats["progress"] = map_angle_to_progress(
                         counter.right_angle)
 
+                elif results.pose_landmarks:
+                    form_warning = "Please make sure your full upper body is visible."
                 if stats.get("workout_complete"):
                     pass
                 elif not dumbbell_detected:
@@ -196,16 +229,11 @@ def generate_frames():
 
 # --- Routes ---
 @app.route('/')
-def dashboard():
-    # The new dashboard will be the main page.
-    # We pass the history data directly on initial load.
-    history_data = []
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, 'r', newline='') as f:
-            reader = csv.DictReader(f)
-            history_data = sorted(
-                list(reader), key=lambda x: x['timestamp'], reverse=True)
-    return render_template('new_dashboard.html', history=history_data)
+def index():
+    """Redirects the root URL to the exercise selection page."""
+    # This makes the exercise selection the default starting page.
+    # We will warm up the camera on this page.
+    return redirect(url_for('select_exercise'))
 
 
 @app.route('/dashboard_data')
@@ -245,6 +273,11 @@ def dashboard_data():
 @app.route('/select_exercise')
 def select_exercise():
     """Renders the page for selecting an exercise."""
+    # --- Camera Warm-up ---
+    # Start initializing the camera in the background as soon as the user
+    # lands on this page. This prevents the delay when the workout starts.
+    threading.Thread(target=get_camera, daemon=True).start()
+
     # Define available exercises
     available_exercises = [
         {'id': 'bicep_curls', 'name': 'Bicep Curls', 'disabled': False},
@@ -273,6 +306,20 @@ def select_exercise():
             exercise['name'], 'Never')
 
     return render_template('dashboard.html', exercises=available_exercises)
+
+
+@app.route('/new_dashboard')
+def new_dashboard():
+    """Renders the new dashboard with charts and history."""
+    history_data = []
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, 'r', newline='') as f:
+            reader = csv.DictReader(f)
+            history_data = sorted(
+                list(reader), key=lambda x: x['timestamp'], reverse=True)
+
+    # This route is now separate from the main entry point.
+    return render_template('new_dashboard.html', history=history_data)
 
 
 @app.route('/workout')
@@ -396,43 +443,6 @@ def delete_entry():
         writer.writerows(updated_history)
 
     return jsonify({"status": "success", "message": "Entry deleted"})
-
-
-@app.route('/chart_data')
-def chart_data():
-    """Processes workout history to provide data for charts."""
-    weekly_progress = {
-        "labels": [],
-        "data": []
-    }
-
-    if os.path.exists(HISTORY_FILE):
-        # --- Weekly Progress Chart (Last 7 Days) ---
-        today = datetime.now()
-        last_7_days = [(today - timedelta(days=i)) for i in range(6, -1, -1)]
-
-        # Initialize labels and a dictionary for daily totals
-        weekly_progress["labels"] = [day.strftime("%a") for day in last_7_days]
-        daily_totals = {day.strftime("%Y-%m-%d"): 0 for day in last_7_days}
-
-        with open(HISTORY_FILE, 'r', newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                try:
-                    workout_date_str = row['timestamp'].split(' ')[0]
-                    # Ensure the date is within the last 7 days
-                    workout_datetime = datetime.strptime(
-                        workout_date_str, "%Y-%m-%d")
-                    if workout_datetime.date() in [d.date() for d in last_7_days]:
-                        duration_minutes = float(row['duration_seconds']) / 60
-                        daily_totals[workout_date_str] += duration_minutes
-                except (ValueError, KeyError):
-                    continue  # Skip rows with bad data
-
-        weekly_progress["data"] = [
-            round(daily_totals[day.strftime("%Y-%m-%d")]) for day in last_7_days]
-
-    return jsonify({"weekly_progress": weekly_progress})
 
 
 if __name__ == "__main__":
