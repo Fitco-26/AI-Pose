@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -18,7 +18,7 @@
       href="{{ url_for('static', filename='css/new_dashboard_style.css') }}"
     />
   </head>
-  <body data-theme="dark">
+  <body>
     <div class="dashboard-wrapper">
       <!-- ==== Sidebar Navigation ==== -->
       <nav class="sidebar">
@@ -38,7 +38,7 @@
             >
           </li>
           <li>
-            <a href="{{ url_for('new_dashboard') }}"
+            <a href="{{ url_for('history') }}"
               ><i data-feather="clock"></i><span>History</span></a
             >
           </li>
@@ -96,6 +96,36 @@
     </div>
     <script>
       feather.replace(); // Initialize feather icons
+
+      // --- Persistent Theme Loader ---
+      const savedTheme = localStorage.getItem("theme") || "dark";
+      document.documentElement.setAttribute("data-theme", savedTheme);
+
+      // --- Page Transition Animation ---
+      document.addEventListener("DOMContentLoaded", () => {
+        const sidebarLinks = document.querySelectorAll(".sidebar-links a");
+        const mainContent = document.querySelector(".main-content");
+
+        sidebarLinks.forEach((link) => {
+          // Don't animate external links or the currently active page
+          if (
+            link.parentElement.classList.contains("active") ||
+            !link.href.startsWith(window.location.origin)
+          ) {
+            return;
+          }
+
+          link.addEventListener("click", function (e) {
+            e.preventDefault();
+            mainContent.classList.add("fade-out");
+            setTimeout(() => {
+              window.location.href = this.href;
+            }, 500); // Match CSS animation duration
+          });
+        });
+      });
     </script>
+  </body>
+</html>
   </body>
 </html>

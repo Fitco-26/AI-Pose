@@ -23,11 +23,26 @@ function updateStats() {
       const errorLogContainer = document.getElementById("errorLogContainer");
       const errorLogEl = document.getElementById("errorLog");
       const warningEl = document.getElementById("warning");
+      const stageEl = document.getElementById("stage");
+      const repsEl = document.getElementById("reps");
 
-      document.getElementById("reps").innerText = `Left: ${data.left} | Right: ${
-        data.right
-      } | Total: ${data.total}`;
-      document.getElementById("stage").innerText = `Stage: ${data.stage}`;
+      // --- UI Customization based on Exercise ---
+      if (typeof EXERCISE_ID !== 'undefined' && EXERCISE_ID === 'squats') {
+        // For squats, show only total reps and hide other info.
+        repsEl.innerText = `Total Reps: ${data.total}`;
+        stageEl.innerText = `Stage: ${data.stage}`; // Show stage
+        stageEl.style.display = 'block';
+        warningEl.style.display = 'block'; // Show real-time warning text
+        errorLogContainer.style.display = 'block'; // Show the form feedback log
+      } else {
+        // Default behavior for bicep curls
+        repsEl.innerText = `Left: ${data.left} | Right: ${data.right} | Total: ${data.total}`;
+        stageEl.innerText = `Stage: ${data.stage}`;
+        stageEl.style.display = 'block';
+        warningEl.style.display = 'block';
+        if (errorLogContainer.style.display !== 'none') errorLogContainer.style.display = 'block';
+      }
+
       warningEl.innerText = data.warning;
 
       // --- Live Error Log Update ---

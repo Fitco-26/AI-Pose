@@ -1,173 +1,148 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Workout History</title>
+    <!-- Fonts and Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/feather-icons"></script>
+    <!-- Main Stylesheet (using the new dashboard style) -->
     <link
       rel="stylesheet"
-      href="{{ url_for('static', filename='css/style.css') }}"
+      href="{{ url_for('static', filename='css/new_dashboard_style.css') }}"
     />
-    <style>
-      .history-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 40px 20px;
-        min-height: 100vh;
-        color: #fff;
-        text-align: center;
-        box-sizing: border-box;
-      }
-      .history-container h1 {
-        font-size: 3rem;
-        margin-bottom: 50px;
-        border-bottom: 2px solid rgba(0, 255, 150, 0.5);
-        padding-bottom: 10px;
-      }
-      .history-table {
-        width: 80%;
-        max-width: 900px;
-        border-collapse: collapse;
-        margin-bottom: 40px;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-      }
-      .history-table th,
-      .history-table td {
-        padding: 15px;
-        border: 1px solid #333;
-      }
-      .history-table th {
-        background-color: #1c1c1c;
-        color: #00ff99;
-        font-size: 1.2rem;
-      }
-      .history-table td {
-        background-color: #222;
-        font-size: 1rem;
-      }
-      .history-table tr:nth-child(even) td {
-        background-color: #282828;
-      }
-      .no-history {
-        font-size: 1.2rem;
-        color: #888;
-        margin-top: 20px;
-      }
-      .sortable-header {
-        cursor: pointer;
-        position: relative;
-      }
-      .sortable-header:hover {
-        background-color: #2a2a2a;
-      }
-      .sortable-header .sort-indicator {
-        position: absolute;
-        right: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 0.8em;
-      }
-      .delete-btn {
-        background-color: #ff5f6d;
-        color: white;
-        padding: 5px 10px;
-        font-size: 0.9rem;
-        border-radius: 5px;
-        border: none;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-      }
-      .search-container {
-        width: 80%;
-        max-width: 900px;
-        margin-bottom: 25px;
-      }
-      #searchInput {
-        width: 100%;
-        padding: 12px 15px;
-        font-size: 1rem;
-        border-radius: 8px;
-        border: 1px solid #444;
-        background-color: #2a2a2a;
-        color: #fff;
-        box-sizing: border-box;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
-      }
-      #searchInput:focus {
-        outline: none;
-        border-color: #00ff99;
-        box-shadow: 0 0 10px rgba(0, 255, 150, 0.3);
-      }
-    </style>
   </head>
   <body>
-    <div class="history-container">
-      <h1>Workout History</h1>
-
-      {% if history %}
-      <div class="search-container">
-        <input
-          type="text"
-          id="searchInput"
-          placeholder="Filter by exercise name..."
-        />
-      </div>
-
-      <table class="history-table">
-        <thead>
-          <tr>
-            <th class="sortable-header" data-sort-col="0" data-sort-dir="desc">
-              Date & Time <span class="sort-indicator">▼</span>
-            </th>
-            <th>Exercise</th>
-            <th
-              class="sortable-header"
-              data-sort-col="2"
-              data-sort-type="number"
+    <div class="dashboard-wrapper">
+      <!-- ==== Sidebar Navigation ==== -->
+      <nav class="sidebar">
+        <div class="sidebar-header">
+          <i data-feather="activity"></i>
+          <span>FitCo</span>
+        </div>
+        <ul class="sidebar-links">
+          <li>
+            <a href="{{ url_for('new_dashboard') }}"
+              ><i data-feather="grid"></i><span>Dashboard</span></a
             >
-              Total Reps <span class="sort-indicator"></span>
-            </th>
-            <th
-              class="sortable-header"
-              data-sort-col="3"
-              data-sort-type="number"
+          </li>
+          <li>
+            <a href="{{ url_for('select_exercise') }}"
+              ><i data-feather="video"></i><span>Workouts</span></a
             >
-              Duration (seconds) <span class="sort-indicator"></span>
-            </th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for entry in history %}
-          <tr data-row-timestamp="{{ entry.timestamp }}">
-            <td>{{ entry.timestamp }}</td>
-            <td>{{ entry.exercise }}</td>
-            <td>{{ entry.reps }}</td>
-            <td>{{ entry.duration_seconds }}</td>
-            <td>
-              <button class="delete-btn" data-timestamp="{{ entry.timestamp }}">
-                Delete
-              </button>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <p class="no-history">
-        No workout history found. Complete a workout to see your stats here!
-      </p>
-      {% endif %}
+          </li>
+          <li class="active">
+            <a href="{{ url_for('history') }}"
+              ><i data-feather="clock"></i><span>History</span></a
+            >
+          </li>
+          <li>
+            <a href="#"><i data-feather="settings"></i><span>Settings</span></a>
+          </li>
+        </ul>
+        <div class="sidebar-footer">
+          <a href="#"><i data-feather="user"></i><span>Profile</span></a>
+          <a href="#"><i data-feather="log-out"></i><span>Logout</span></a>
+        </div>
+      </nav>
 
-      <button id="startButton" onclick="location.href='/'">
-        Back to Dashboard
-      </button>
+      <!-- ==== Main Content ==== -->
+      <main class="main-content">
+        <h3 class="page-title">Workout History</h3>
+
+        {% if history %}
+        <div class="card-header">
+          <div class="search-container">
+            <i data-feather="search"></i>
+            <input
+              type="text"
+              id="searchInput"
+              placeholder="Filter by exercise name..."
+              autocomplete="off"
+            />
+            <div id="suggestionsBox" class="suggestions-box"></div>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th
+                  class="sortable-header"
+                  data-sort-col="0"
+                  data-sort-dir="desc"
+                >
+                  Date & Time <span class="sort-indicator">▼</span>
+                </th>
+                <th>Exercise</th>
+                <th
+                  class="sortable-header"
+                  data-sort-col="2"
+                  data-sort-type="number"
+                >
+                  Total Reps <span class="sort-indicator"></span>
+                </th>
+                <th
+                  class="sortable-header"
+                  data-sort-col="3"
+                  data-sort-type="number"
+                >
+                  Duration (seconds) <span class="sort-indicator"></span>
+                </th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in history %}
+              <tr data-row-timestamp="{{ entry.timestamp }}">
+                <td>
+                  {{ entry.timestamp.split(' ')[0] }}
+                  <span class="time-part"
+                    >({{ entry.timestamp.split(' ')[1] }})</span
+                  >
+                </td>
+                <td>{{ entry.exercise }}</td>
+                <td>{{ entry.reps }}</td>
+                <td>{{ entry.duration_seconds }}</td>
+                <td>
+                  <button
+                    class="delete-btn"
+                    data-timestamp="{{ entry.timestamp }}"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="no-history">
+          No workout history found. Complete a workout to see your stats here!
+        </p>
+        {% endif %}
+      </main>
     </div>
 
     <script>
+      feather.replace(); // Initialize feather icons
+      const uniqueExercises = {{ unique_exercises | tojson }};
+
+      // --- Persistent Theme Loader ---
+      const savedTheme = localStorage.getItem("theme") || "dark";
+      document.documentElement.setAttribute("data-theme", savedTheme);
+
       document.addEventListener("DOMContentLoaded", () => {
-        const table = document.querySelector(".history-table");
+        const table = document.querySelector("table");
+        if (!table) return; // Exit if no history table
         const headers = table.querySelectorAll(".sortable-header");
         const tbody = table.querySelector("tbody");
 
@@ -175,6 +150,28 @@
         if (!table) {
           return;
         }
+
+        // --- Page Transition Animation ---
+        const sidebarLinks = document.querySelectorAll(".sidebar-links a");
+        const mainContent = document.querySelector(".main-content");
+
+        sidebarLinks.forEach((link) => {
+          // Don't animate external links or the currently active page
+          if (
+            link.parentElement.classList.contains("active") ||
+            !link.href.startsWith(window.location.origin)
+          ) {
+            return;
+          }
+
+          link.addEventListener("click", function (e) {
+            e.preventDefault();
+            mainContent.classList.add("fade-out");
+            setTimeout(() => {
+              window.location.href = this.href;
+            }, 500); // Match CSS animation duration
+          });
+        });
 
         headers.forEach((header) => {
           header.addEventListener("click", () => {
@@ -184,16 +181,17 @@
             const newDir = currentDir === "asc" ? "desc" : "asc";
 
             // Remove indicators from other headers
-            headers.forEach(h => {
-                h.querySelector('.sort-indicator').textContent = '';
-                if (h !== header) {
-                    h.removeAttribute('data-sort-dir');
-                }
+            headers.forEach((h) => {
+              h.querySelector(".sort-indicator").textContent = "";
+              if (h !== header) {
+                h.removeAttribute("data-sort-dir");
+              }
             });
 
             // Set new direction and indicator for clicked header
             header.dataset.sortDir = newDir;
-            header.querySelector('.sort-indicator').textContent = newDir === 'asc' ? '▲' : '▼';
+            header.querySelector(".sort-indicator").textContent =
+              newDir === "asc" ? "▲" : "▼";
 
             // Sort the rows
             const rows = Array.from(tbody.querySelectorAll("tr"));
@@ -216,75 +214,114 @@
             });
 
             // Re-append sorted rows
-            rows.forEach(row => {
+            rows.forEach((row) => {
               tbody.appendChild(row);
             });
           });
         });
 
         // --- Delete Functionality ---
-        tbody.addEventListener('click', function(event) {
-            if (event.target.classList.contains('delete-btn')) {
-                const button = event.target;
-                const timestamp = button.dataset.timestamp;
+        tbody.addEventListener("click", function (event) {
+          if (event.target.classList.contains("delete-btn")) {
+            const button = event.target;
+            const timestamp = button.dataset.timestamp;
 
-                if (confirm(`Are you sure you want to delete the entry from ${timestamp}?`)) {
-                    fetch('/delete_entry', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ timestamp: timestamp }),
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            // Find the table row and remove it from the DOM
-                            const row = button.closest('tr');
-                            row.remove();
-                        } else {
-                            alert('Error deleting entry: ' + data.message);
-                        }
-                    });
-                }
+            if (
+              confirm(
+                `Are you sure you want to delete the entry from ${timestamp}?`
+              )
+            ) {
+              fetch("/delete_entry", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ timestamp: timestamp }),
+              })
+                .then((response) => response.json())
+                .then((data) => {
+                  if (data.status === "success") {
+                    // Find the table row and remove it from the DOM
+                    const row = button.closest("tr");
+                    row.remove();
+                  } else {
+                    alert("Error deleting entry: " + data.message);
+                  }
+                });
             }
+          }
         });
 
         // --- Search/Filter Functionality ---
         const searchInput = document.getElementById("searchInput");
-        if (searchInput && tbody) {
-            searchInput.addEventListener('keyup', function() {
-                const filter = searchInput.value.toLowerCase();
-                const rows = tbody.querySelectorAll('tr');
+        const suggestionsBox = document.getElementById("suggestionsBox");
 
-                rows.forEach(row => {
-                    // The exercise name is in the second cell (index 1)
-                    const exerciseCell = row.cells[1];
-                    if (exerciseCell) {
-                        const exerciseName = exerciseCell.textContent || exerciseCell.innerText;
-                        // Show or hide the row based on whether the exercise name matches the filter
-                        row.style.display = exerciseName.toLowerCase().includes(filter) ? "" : "none";
-                    }
+        function filterTable() {
+          const filter = searchInput.value.toLowerCase();
+          const rows = tbody.querySelectorAll("tr");
+          rows.forEach((row) => {
+            const exerciseCell = row.cells[1];
+            if (exerciseCell) {
+              const exerciseName =
+                exerciseCell.textContent || exerciseCell.innerText;
+              row.style.display = exerciseName.toLowerCase().includes(filter)
+                ? ""
+                : "none";
+            }
+          });
+        }
+
+        if (searchInput && tbody && suggestionsBox) {
+          searchInput.addEventListener("input", function () {
+            const inputValue = this.value.toLowerCase();
+            suggestionsBox.innerHTML = "";
+
+            if (inputValue.length > 0) {
+              const filteredExercises = uniqueExercises.filter((ex) =>
+                ex.toLowerCase().includes(inputValue)
+              );
+
+              if (filteredExercises.length > 0) {
+                filteredExercises.forEach((ex) => {
+                  const item = document.createElement("div");
+                  item.classList.add("suggestion-item");
+                  item.textContent = ex;
+                  item.addEventListener("click", () => {
+                    searchInput.value = ex;
+                    suggestionsBox.style.display = "none";
+                    filterTable();
+                  });
+                  suggestionsBox.appendChild(item);
                 });
-            });
+                suggestionsBox.style.display = "block";
+              } else {
+                suggestionsBox.style.display = "none";
+              }
+            } else {
+              suggestionsBox.style.display = "none";
+            }
+            // Also filter the table live as user types
+            filterTable();
+          });
+
+          // Hide suggestions when clicking outside
+          document.addEventListener("click", function (e) {
+            if (!searchInput.contains(e.target)) {
+              suggestionsBox.style.display = "none";
+            }
+          });
         }
 
         // --- Auto-filter from URL parameter ---
         const urlParams = new URLSearchParams(window.location.search);
-        const exerciseFilter = urlParams.get('exercise');
+        const exerciseFilter = urlParams.get("exercise");
 
         if (exerciseFilter && searchInput) {
-            // Set the search input value to the exercise from the URL
-            searchInput.value = exerciseFilter;
-
-            // Create and dispatch a 'keyup' event to trigger the filter
-            const event = new KeyboardEvent('keyup', {
-                'bubbles': true,
-                'cancelable': true
-            });
-            searchInput.dispatchEvent(event);
+          // Set the search input value to the exercise from the URL
+          searchInput.value = exerciseFilter;
+          // Trigger the filter function
+          filterTable();
         }
-      });
       });
     </script>
   </body>

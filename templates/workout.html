@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Bicep Curl Tracker</title>
+    <title>Workout Tracker</title>
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='css/style.css') }}"
@@ -60,6 +60,10 @@
       </div>
     </div>
 
+    <script>
+      // Pass the exercise ID from Flask to JavaScript
+      const EXERCISE_ID = "{{ exercise_id }}";
+    </script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
   </body>
 </html>

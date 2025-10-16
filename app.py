@@ -5,6 +5,7 @@ import cv2
 from ultralytics import YOLO
 from modules.pose_detector import PoseDetector
 from modules.curl_counter import CurlCounter
+from modules.squat_corrector import SquatCorrector
 from modules.posture.utils.angle_utils import map_angle_to_progress
 import mediapipe as mp
 import pyttsx3
@@ -69,7 +70,8 @@ counter = CurlCounter()
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 yolo_model = YOLO("models/best.pt").to(device)
 is_workout_active = False
-current_exercise = None  # To store the selected exercise
+current_exercise = None      # To store the selected exercise ID
+exercise_handler = None      # To hold the instance of CurlCounter or SquatCorrector
 
 # Store stats for AJAX polling
 stats = {
@@ -118,7 +120,7 @@ def are_landmarks_visible(landmarks, visibility_threshold=0.7):
 
 
 def generate_frames():
-    global stats, is_workout_active, last_spoken_feedback, last_spoken_time, last_spoken_rep
+    global stats, is_workout_active, last_spoken_feedback, last_spoken_time, last_spoken_rep, exercise_handler, current_exercise
 
     cap = get_camera()
     if cap is None:
@@ -143,77 +145,110 @@ def generate_frames():
             processed_image = frame.copy()
 
             if is_workout_active:
-                # --- Processing (YOLO, Pose Detection, Counter) ---
-                yolo_results = yolo_model(processed_image, verbose=False)
-                dumbbell_detected = any(len(r.boxes) > 0 for r in yolo_results)
+                # --- Bicep Curls Logic ---
+                if current_exercise == 'bicep_curls' and isinstance(exercise_handler, CurlCounter):
+                    yolo_results = yolo_model(processed_image, verbose=False)
+                    dumbbell_detected = any(
+                        len(r.boxes) > 0 for r in yolo_results)
+                    form_warning = ""
 
-                form_warning = ""  # For form feedback
+                    processed_image, results = detector.detect(processed_image)
+                    landmarks_visible = results.pose_landmarks and are_landmarks_visible(
+                        results.pose_landmarks)
 
-                # --- Pose Detection ---
-                processed_image, results = detector.detect(processed_image)
-                landmarks_visible = results.pose_landmarks and are_landmarks_visible(
-                    results.pose_landmarks)
+                    if landmarks_visible:
+                        exercise_handler.process(
+                            processed_image, results.pose_landmarks.landmark)
+                        left, right = exercise_handler.left_counter, exercise_handler.right_counter
+                        total = min(left, right)
+                        stats["left"], stats["right"], stats["total"] = left, right, total
+                        stats["stage"] = f"L-{exercise_handler.left_stage or '-'} | R-{exercise_handler.right_stage or '-'}"
 
-                if landmarks_visible:
-                    # Only process if the user is fully visible
+                        feedbacks = [f for f in [
+                            exercise_handler.left_feedback, exercise_handler.right_feedback] if f]
+                        if feedbacks:
+                            form_warning = " | ".join(sorted(feedbacks))
 
-                    counter.process(processed_image,
-                                    results.pose_landmarks.landmark)
-                    left, right = counter.left_counter, counter.right_counter
-                    total = min(left, right)
-                    stats["left"], stats["right"], stats["total"] = left, right, total
-                    stats["stage"] = f"L-{counter.left_stage or '-'} | R-{counter.right_stage or '-'}"
+                        if exercise_handler.new_error_logged:
+                            error_side, error_msg = exercise_handler.last_error
+                            rep_at_error = (stats[error_side] + 1)
+                            stats["error_log"].append(
+                                f"At Rep {rep_at_error} ({error_side.capitalize()}): {error_msg}")
+                            exercise_handler.new_error_logged = False
 
-                    feedbacks = [f for f in [
-                        counter.left_feedback, counter.right_feedback] if f]
-                    if feedbacks:
-                        form_warning = " | ".join(sorted(feedbacks))
+                        current_rep_count = max(left, right)
+                        if current_rep_count > last_spoken_rep:
+                            speak_async(str(current_rep_count))
+                            last_spoken_rep = current_rep_count
 
-                    if counter.new_error_logged:
-                        error_side, error_msg = counter.last_error
-                        rep_at_error = (stats[error_side] + 1)
-                        stats["error_log"].append(
-                            f"At Rep {rep_at_error} ({error_side.capitalize()}): {error_msg}")
-                        counter.new_error_logged = False
+                            if current_rep_count == round(TARGET_REPS / 2):
+                                speak_async("Halfway there, keep it up!")
+                            elif current_rep_count == TARGET_REPS:
+                                speak_async("Great set! Take a rest!")
 
-                    current_rep_count = max(left, right)
-                    if current_rep_count > last_spoken_rep:
-                        speak_async(str(current_rep_count))
-                        last_spoken_rep = current_rep_count
+                        stats["progress"] = map_angle_to_progress(
+                            exercise_handler.right_angle)
 
-                        if current_rep_count == round(TARGET_REPS / 2):
+                    elif results.pose_landmarks:
+                        form_warning = "Please make sure your full upper body is visible."
+
+                    if not dumbbell_detected:
+                        stats["warning"] = "⚠ Please pick up your dumbbell!"
+                    else:
+                        stats["warning"] = form_warning
+
+                # --- Squats Logic ---
+                elif current_exercise == 'squats' and isinstance(exercise_handler, SquatCorrector):
+                    processed_image, rep_count, stage, form_warning = exercise_handler.process_frame(
+                        processed_image)
+                    total = rep_count
+                    stats["total"] = total
+                    stats["stage"] = stage
+                    stats["warning"] = form_warning
+
+                    # Map knee angle to progress bar (if available)
+                    if exercise_handler.recording:
+                        last_frame_data = exercise_handler.recording[-1]
+                        knee_angle = last_frame_data.get('knee_angle')
+                        if knee_angle is not None:
+                            # Squat progress: 165 (standing) is 0%, 90 (bottom) is 100%
+                            stats["progress"] = map_angle_to_progress(
+                                knee_angle, min_angle=90, max_angle=165)
+
+                    if total > last_spoken_rep:
+                        speak_async(str(total))
+                        last_spoken_rep = total
+                        if total == round(TARGET_REPS / 2):
                             speak_async("Halfway there, keep it up!")
-                        elif current_rep_count == TARGET_REPS:
+                        elif total == TARGET_REPS:
                             speak_async("Great set! Take a rest!")
 
-                    if total >= TARGET_REPS and is_workout_active:
-                        is_workout_active = False
-                        stats["workout_complete"] = True
-                        stats["warning"] = stats["target_hit_message"]
-                        # Speak the completion message
-                        speak_async(stats["target_hit_message"])
-                        continue
+                    # Handle logged errors for squats
+                    if exercise_handler.new_error_logged:
+                        error_msg = exercise_handler.last_error_message
+                        rep_at_error = total + 1  # Error is for the upcoming rep
+                        stats["error_log"].append(
+                            f"At Rep {rep_at_error}: {error_msg}")
+                        exercise_handler.new_error_logged = False
 
-                    stats["progress"] = map_angle_to_progress(
-                        counter.right_angle)
+                # --- Common Logic (Completion, Voice Feedback) ---
+                if stats.get("total", 0) >= TARGET_REPS and is_workout_active:
+                    is_workout_active = False
+                    stats["workout_complete"] = True
+                    stats["warning"] = stats["target_hit_message"]
+                    speak_async(stats["target_hit_message"])
+                    continue
 
-                elif results.pose_landmarks:
-                    form_warning = "Please make sure your full upper body is visible."
-                if stats.get("workout_complete"):
-                    pass
-                elif not dumbbell_detected:
-                    stats["warning"] = "⚠ Please pick up your dumbbell!"
-                else:
-                    stats["warning"] = form_warning
-                    current_time = time.time()
-                    should_speak = form_warning and (form_warning != last_spoken_feedback or (
-                        current_time - last_spoken_time > FEEDBACK_COOLDOWN))
-                    if should_speak:
-                        speak_async(form_warning)
-                        last_spoken_feedback = form_warning
-                        last_spoken_time = current_time
-                    elif not form_warning and last_spoken_feedback:
-                        last_spoken_feedback = ""
+                # Voice feedback for form warnings
+                current_time = time.time()
+                should_speak = form_warning and (form_warning != last_spoken_feedback or (
+                    current_time - last_spoken_time > FEEDBACK_COOLDOWN))
+                if should_speak:
+                    speak_async(form_warning)
+                    last_spoken_feedback = form_warning
+                    last_spoken_time = current_time
+                elif not form_warning and last_spoken_feedback:
+                    last_spoken_feedback = ""
 
             # Encode frame for streaming
             frame_to_send = cv2.flip(processed_image, 1)
@@ -281,7 +316,7 @@ def select_exercise():
     # Define available exercises
     available_exercises = [
         {'id': 'bicep_curls', 'name': 'Bicep Curls', 'disabled': False},
-        {'id': 'squats', 'name': 'Squats', 'disabled': True},
+        {'id': 'squats', 'name': 'Squats', 'disabled': False},
         {'id': 'push_ups', 'name': 'Push-ups', 'disabled': True},
     ]
 
@@ -311,22 +346,17 @@ def select_exercise():
 @app.route('/new_dashboard')
 def new_dashboard():
     """Renders the new dashboard with charts and history."""
-    history_data = []
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, 'r', newline='') as f:
-            reader = csv.DictReader(f)
-            history_data = sorted(
-                list(reader), key=lambda x: x['timestamp'], reverse=True)
-
-    # This route is now separate from the main entry point.
-    return render_template('new_dashboard.html', history=history_data)
+    # We no longer pass history data to the main dashboard.
+    return render_template('new_dashboard.html')
 
 
 @app.route('/workout')
 def workout():
     global current_exercise
     current_exercise = request.args.get('exercise', 'bicep_curls')
-    return render_template('workout.html')
+    # Pass exercise info to the template
+    exercise_name = current_exercise.replace('_', ' ').title()
+    return render_template('workout.html', exercise_name=exercise_name, exercise_id=current_exercise)
 
 
 @app.route('/video_feed')
@@ -338,39 +368,66 @@ def video_feed():
 @app.route('/history')
 def history():
     history_data = []
+    unique_exercises = set()
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, 'r', newline='') as f:
             reader = csv.DictReader(f)
+            history_list = list(reader)
             # Reverse the list to show the most recent workouts first
             history_data = sorted(
-                list(reader), key=lambda x: x['timestamp'], reverse=True)
+                history_list, key=lambda x: x['timestamp'], reverse=True)
+            for entry in history_list:
+                if entry.get('exercise'):
+                    unique_exercises.add(entry['exercise'])
 
-    return render_template('history.html', history=history_data)
+    return render_template('history.html', history=history_data, unique_exercises=list(unique_exercises))
 
 
 @app.route('/stats')
 def get_stats():
-    return jsonify(stats)
+    # For bicep curls, we send left/right/total. For others, just total.
+    # The frontend should handle this gracefully.
+    if current_exercise == 'bicep_curls':
+        return jsonify(stats)
+    else:
+        # Create a compatible structure for other exercises
+        response_stats = {
+            "total": stats.get("total", 0),
+            "stage": stats.get("stage", "-"),
+            "warning": stats.get("warning", ""),
+            "progress": stats.get("progress", 0),
+            "error_log": stats.get("error_log", []),
+            "workout_complete": stats.get("workout_complete", False),
+            # Add dummy left/right for frontend compatibility if needed
+            "left": 0,
+            "right": 0
+        }
+        return jsonify(response_stats)
 
 
 @app.route('/start', methods=['POST'])
 def start_workout():
-    global is_workout_active, counter, stats, last_spoken_feedback, last_spoken_time, last_spoken_rep, workout_start_time, current_exercise
+    global is_workout_active, stats, last_spoken_feedback, last_spoken_time, last_spoken_rep, workout_start_time, current_exercise, exercise_handler
     workout_start_time = time.time()
     is_workout_active = True
     # Reset counters & stats at workout start
-    counter = CurlCounter()
     stats = {"left": 0, "right": 0, "total": 0,
-             "stage": "L- | R-", "warning": "", "progress": 0, "error_log": [],
+             "stage": "-", "warning": "", "progress": 0, "error_log": [],
              "workout_complete": False, "target_hit_message": "Target Hit! Great job! Take a rest."}
     last_spoken_feedback = ""
     last_spoken_time = 0
     last_spoken_rep = 0
 
-    # Here you can add logic for different counters based on `current_exercise`
-    # For now, we only have CurlCounter
+    # Instantiate the correct handler for the selected exercise
     if current_exercise == 'bicep_curls':
-        counter = CurlCounter()
+        exercise_handler = CurlCounter()
+        stats["stage"] = "L- | R-"
+    elif current_exercise == 'squats':
+        # The app's TTS will be used for rep counting and feedback
+        exercise_handler = SquatCorrector(speak_feedback=False)
+        stats["stage"] = "standing"
+    else:
+        exercise_handler = None  # No handler for this exercise yet
 
     speak_async(f"Let's go for {TARGET_REPS} reps. Starting now.")
     return jsonify({"status": "Workout started"})
@@ -378,14 +435,19 @@ def start_workout():
 
 @app.route('/stop', methods=['POST'])
 def stop_workout():
-    global is_workout_active, workout_start_time, stats, current_exercise
+    global is_workout_active, workout_start_time, stats, current_exercise, exercise_handler
     is_workout_active = False
+
+    # If there's a handler with a release method, call it
+    if hasattr(exercise_handler, 'release'):
+        exercise_handler.release()
+    exercise_handler = None
 
     if workout_start_time:
         duration = time.time() - workout_start_time
         total_reps = stats.get('total', 0)
         exercise_name = current_exercise.replace(
-            '_', ' ').title() if current_exercise else "Bicep Curls"
+            '_', ' ').title() if current_exercise else "Unknown Exercise"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Ensure data directory exists

@@ -61,6 +61,7 @@
           <div class="header-greeting">
             <h1>Welcome Back, Alex!</h1>
             <p>Let's crush your goals today.</p>
+            <div class="header-separator"></div>
           </div>
           <div class="header-actions">
             <div class="theme-toggle">
@@ -153,44 +154,35 @@
               <div id="accuracy-text" class="progress-ring-text">0%</div>
             </div>
           </div>
-
-          <!-- Workout History Table -->
-          <div class="card history-card">
-            <h3>Workout History</h3>
-            <div class="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Exercise</th>
-                    <th>Reps</th>
-                    <th>Duration</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% if history %} {% for entry in history[:5] %} {# Show latest
-                  5 entries #}
-                  <tr>
-                    <td>{{ entry.timestamp.split(' ')[0] }}</td>
-                    <td>{{ entry.exercise }}</td>
-                    <td>{{ entry.reps }}</td>
-                    <td>{{ (entry.duration_seconds | int // 60) }} min</td>
-                  </tr>
-                  {% endfor %} {% else %}
-                  <tr>
-                    <td colspan="4" style="text-align: center">
-                      No workout history yet.
-                    </td>
-                  </tr>
-                  {% endif %}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       </main>
     </div>
 
     <script src="{{ url_for('static', filename='js/new_dashboard_script.js') }}"></script>
+    <script>
+      // --- Page Transition Animation ---
+      document.addEventListener("DOMContentLoaded", () => {
+        const sidebarLinks = document.querySelectorAll(".sidebar-links a");
+        const mainContent = document.querySelector(".main-content");
+
+        sidebarLinks.forEach((link) => {
+          // Don't animate external links or the currently active page
+          if (
+            link.parentElement.classList.contains("active") ||
+            !link.href.startsWith(window.location.origin)
+          ) {
+            return;
+          }
+
+          link.addEventListener("click", function (e) {
+            e.preventDefault();
+            mainContent.classList.add("fade-out");
+            setTimeout(() => {
+              window.location.href = this.href;
+            }, 500); // Match CSS animation duration
+          });
+        });
+      });
+    </script>
   </body>
 </html>
