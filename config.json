@@ -1,0 +1,8 @@
+{
+    "speak_feedback": true,
+    "default_target_reps": 10,
+    "feedback_cooldown_sec": 5.0,
+    "camera_index": 0,
+    "user_name": "Mokshith",
+    "ask_camera_permission": false
+}

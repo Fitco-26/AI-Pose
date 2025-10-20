@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirm Camera Access</title>
+    <!-- Fonts and Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/feather-icons"></script>
+    <!-- Main Stylesheet -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/new_dashboard_style.css') }}"
+    />
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      .confirmation-card {
+        max-width: 500px;
+        text-align: center;
+        padding: 40px;
+      }
+      .confirmation-card h1 {
+        font-size: 1.8rem;
+        margin-bottom: 15px;
+        color: var(--text-headings);
+      }
+      .confirmation-card p {
+        color: var(--text-secondary);
+        margin-bottom: 30px;
+      }
+      .button-group {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card confirmation-card">
+      <h1>
+        <i
+          data-feather="camera"
+          style="vertical-align: middle; margin-right: 10px"
+        ></i
+        >Camera Access
+      </h1>
+      <p>
+        This workout requires access to your camera for real-time form
+        correction and rep counting. Do you want to proceed?
+      </p>
+      <div class="button-group">
+        <a
+          href="{{ url_for('select_exercise') }}"
+          class="button secondary-button"
+          >Cancel</a
+        >
+        <a
+          href="{{ url_for('workout', exercise=exercise_id) }}"
+          class="button start-button"
+          >Proceed</a
+        >
+      </div>
+    </div>
+
+    <script>
+      feather.replace();
+      // --- Persistent Theme Loader ---
+      const savedTheme = localStorage.getItem("theme") || "dark";
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    </script>
+  </body>
+</html>

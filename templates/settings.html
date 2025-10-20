@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings</title>
+    <!-- Fonts and Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/feather-icons"></script>
+    <!-- Main Stylesheet -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/new_dashboard_style.css') }}"
+    />
+    <style>
+      .settings-form {
+        display: flex;
+        flex-direction: column;
+        gap: 25px;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .form-group label {
+        font-weight: 500;
+        color: var(--text-secondary);
+      }
+      .form-group input[type="text"],
+      .form-group input[type="number"] {
+        padding: 12px;
+        background-color: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 1rem;
+      }
+      .form-group .toggle-switch {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .save-button {
+        align-self: flex-start;
+        margin-top: 20px;
+        background: linear-gradient(
+          90deg,
+          var(--accent-blue),
+          var(--accent-lime)
+        );
+        color: #000;
+        box-shadow: 0 4px 15px var(--shadow-color-lime);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dashboard-wrapper">
+      <!-- ==== Sidebar Navigation ==== -->
+      <nav class="sidebar">
+        <div class="sidebar-header">
+          <i data-feather="activity"></i>
+          <span>FitCo</span>
+        </div>
+        <ul class="sidebar-links">
+          <li>
+            <a href="{{ url_for('new_dashboard') }}"
+              ><i data-feather="grid"></i><span>Dashboard</span></a
+            >
+          </li>
+          <li>
+            <a href="{{ url_for('select_exercise') }}"
+              ><i data-feather="video"></i><span>Workouts</span></a
+            >
+          </li>
+          <li>
+            <a href="{{ url_for('history') }}"
+              ><i data-feather="clock"></i><span>History</span></a
+            >
+          </li>
+          <li class="active">
+            <a href="{{ url_for('settings') }}"
+              ><i data-feather="settings"></i><span>Settings</span></a
+            >
+          </li>
+        </ul>
+        <div class="sidebar-footer">
+          <a href="#"><i data-feather="user"></i><span>Profile</span></a>
+          <a href="#"><i data-feather="log-out"></i><span>Logout</span></a>
+        </div>
+      </nav>
+
+      <!-- ==== Main Content ==== -->
+      <main class="main-content">
+        <h3 class="page-title">Settings</h3>
+
+        <div class="card full-page-card">
+          <form method="POST" class="settings-form">
+            <!-- Profile Settings -->
+            <div class="form-group">
+              <label for="user_name">User Name</label>
+              <input
+                type="text"
+                id="user_name"
+                name="user_name"
+                value="{{ config.user_name }}"
+              />
+            </div>
+
+            <!-- Workout Settings -->
+            <div class="form-group">
+              <label for="default_target_reps">Default Target Reps</label>
+              <input
+                type="number"
+                id="default_target_reps"
+                name="default_target_reps"
+                value="{{ config.default_target_reps }}"
+                min="1"
+              />
+            </div>
+
+            <!-- Feedback Settings -->
+            <div class="form-group">
+              <label>Voice Feedback</label>
+              <div class="toggle-switch">
+                <label class="switch">
+                  <input
+                    type="checkbox"
+                    name="speak_feedback"
+                    {%
+                    if
+                    config.speak_feedback
+                    %}checked{%
+                    endif
+                    %}
+                  />
+                  <span class="slider"></span>
+                </label>
+                <span
+                  >Enable real-time voice corrections and rep counting.</span
+                >
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="feedback_cooldown_sec"
+                >Feedback Cooldown (seconds)</label
+              >
+              <input
+                type="number"
+                id="feedback_cooldown_sec"
+                name="feedback_cooldown_sec"
+                value="{{ config.feedback_cooldown_sec }}"
+                min="0"
+                step="0.5"
+              />
+            </div>
+
+            <!-- Privacy Settings -->
+            <div class="form-group">
+              <label>Camera Access</label>
+              <div class="toggle-switch">
+                <label class="switch">
+                  <input
+                    type="checkbox"
+                    name="ask_camera_permission"
+                    {%
+                    if
+                    config.ask_camera_permission
+                    %}checked{%
+                    endif
+                    %}
+                  />
+                  <span class="slider"></span>
+                </label>
+                <span>Ask for confirmation before each workout.</span>
+              </div>
+            </div>
+
+            <button type="submit" class="button save-button">
+              Save Settings
+            </button>
+          </form>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      feather.replace(); // Initialize feather icons
+      const savedTheme = localStorage.getItem("theme") || "dark";
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    </script>
+  </body>
+</html>

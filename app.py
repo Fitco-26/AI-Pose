@@ -13,10 +13,42 @@ import threading
 import time
 from datetime import datetime, timedelta
 import atexit
+import json
 import csv
 import os
 
 app = Flask(__name__)
+# Necessary for session management
+app.secret_key = 'your_very_secret_key_for_sessions'
+
+# --- Config Management (with Profiles) ---
+CONFIG_FILE = 'config.json'
+DEFAULT_CONFIG = {
+    "speak_feedback": True,
+    "default_target_reps": 15,
+    "feedback_cooldown_sec": 5,
+    "camera_index": 0,
+    "user_name": "User",
+    "ask_camera_permission": False  # Added from previous change
+}
+
+
+def load_config():
+    if not os.path.exists(CONFIG_FILE):
+        return DEFAULT_CONFIG
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            return {**DEFAULT_CONFIG, **json.load(f)}  # Merge with defaults
+    except (json.JSONDecodeError, IOError):
+        return DEFAULT_CONFIG
+
+
+def save_config(config_data):
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config_data, f, indent=4)
+
+
+app.config['APP_CONFIG'] = load_config()
 
 # --- TTS Engine Setup ---
 tts_engine = pyttsx3.init()
@@ -24,6 +56,9 @@ tts_engine = pyttsx3.init()
 
 def speak_async(text):
     """Run TTS in a separate thread to avoid blocking the main app."""
+    if not app.config['APP_CONFIG'].get('speak_feedback', True):
+        return
+
     def run():
         tts_engine.say(text)
         tts_engine.runAndWait()
@@ -41,7 +76,8 @@ def get_camera():
     global _camera_instance
     with _camera_lock:
         if _camera_instance is None:
-            _camera_instance = cv2.VideoCapture(0)
+            camera_index = app.config['APP_CONFIG'].get('camera_index', 0)
+            _camera_instance = cv2.VideoCapture(camera_index)
             if not _camera_instance.isOpened():
                 print("Error: Could not open video stream.")
                 _camera_instance = None  # Ensure it's None if opening fails
@@ -87,8 +123,6 @@ stats = {
 # State for voice feedback
 last_spoken_feedback = ""
 last_spoken_time = 0
-FEEDBACK_COOLDOWN = 5  # seconds
-TARGET_REPS = 15
 last_spoken_rep = 0
 workout_start_time = None
 
@@ -242,7 +276,7 @@ def generate_frames():
                 # Voice feedback for form warnings
                 current_time = time.time()
                 should_speak = form_warning and (form_warning != last_spoken_feedback or (
-                    current_time - last_spoken_time > FEEDBACK_COOLDOWN))
+                    current_time - last_spoken_time > app.config['APP_CONFIG']['feedback_cooldown_sec']))
                 if should_speak:
                     speak_async(form_warning)
                     last_spoken_feedback = form_warning
@@ -265,6 +299,11 @@ def generate_frames():
 # --- Routes ---
 @app.route('/')
 def index():
+    # On first launch, ensure TARGET_REPS is initialized from config
+    global TARGET_REPS
+    if 'TARGET_REPS' not in globals():
+        TARGET_REPS = app.config['APP_CONFIG'].get('default_target_reps', 15)
+
     """Redirects the root URL to the exercise selection page."""
     # This makes the exercise selection the default starting page.
     # We will warm up the camera on this page.
@@ -340,23 +379,56 @@ def select_exercise():
         exercise['last_performed'] = last_performed.get(
             exercise['name'], 'Never')
 
-    return render_template('dashboard.html', exercises=available_exercises)
+    return render_template('dashboard.html', exercises=available_exercises, config=app.config['APP_CONFIG'])
 
 
 @app.route('/new_dashboard')
 def new_dashboard():
     """Renders the new dashboard with charts and history."""
-    # We no longer pass history data to the main dashboard.
-    return render_template('new_dashboard.html')
+    user_name = app.config['APP_CONFIG'].get('user_name', 'User')
+    return render_template('new_dashboard.html', user_name=user_name)
+
+
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    """Renders the settings page and handles form submission."""
+    if request.method == 'POST':
+        current_config = app.config['APP_CONFIG']
+        current_config['user_name'] = request.form.get('user_name', 'User')
+        current_config['default_target_reps'] = int(
+            request.form.get('default_target_reps', 15))
+        current_config['speak_feedback'] = 'speak_feedback' in request.form
+        current_config['feedback_cooldown_sec'] = float(
+            request.form.get('feedback_cooldown_sec', 5))
+        current_config['ask_camera_permission'] = 'ask_camera_permission' in request.form
+
+        save_config(current_config)
+        app.config['APP_CONFIG'] = current_config  # Update live config
+        global TARGET_REPS
+        TARGET_REPS = current_config['default_target_reps']
+
+        return redirect(url_for('settings'))
+    return render_template('settings.html', config=load_config())
+
+
+@app.route('/confirm_camera')
+def confirm_camera():
+    """Shows a confirmation page before accessing the camera."""
+    exercise_id = request.args.get('exercise')
+    return render_template('confirm_camera.html', exercise_id=exercise_id)
 
 
 @app.route('/workout')
 def workout():
-    global current_exercise
+    global current_exercise, TARGET_REPS
     current_exercise = request.args.get('exercise', 'bicep_curls')
+    TARGET_REPS = app.config['APP_CONFIG'].get('default_target_reps', 15)
     # Pass exercise info to the template
     exercise_name = current_exercise.replace('_', ' ').title()
-    return render_template('workout.html', exercise_name=exercise_name, exercise_id=current_exercise)
+    intro_video_path = 'Video/Video_Refinement_Request (1).mp4'
+    if current_exercise == 'squats':
+        intro_video_path = 'Video/Knee_Bending_Exercise_Demonstration.mp4'
+    return render_template('workout.html', exercise_name=exercise_name, exercise_id=current_exercise, intro_video=intro_video_path, target_reps=TARGET_REPS)
 
 
 @app.route('/video_feed')
@@ -414,6 +486,7 @@ def start_workout():
     stats = {"left": 0, "right": 0, "total": 0,
              "stage": "-", "warning": "", "progress": 0, "error_log": [],
              "workout_complete": False, "target_hit_message": "Target Hit! Great job! Take a rest."}
+    TARGET_REPS = app.config['APP_CONFIG'].get('default_target_reps', 15)
     last_spoken_feedback = ""
     last_spoken_time = 0
     last_spoken_rep = 0
