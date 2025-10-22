@@ -22,3 +22,5 @@ LINK : https://huggingface.co/datasets/UniqueData/body-measurements-dataset
 Can we add a feature to save the workout summary (total reps, duration) to a file when I press the 'Stop' button?
 
 Use the past data to train a model to help the model understand it's user better today
+
+add toggle for mediapipe pose detection on and off on the states screen 
