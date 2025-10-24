@@ -44,7 +44,22 @@
             min="1"
           />
         </div>
-        <p id="reps">Left: 0 | Right: 0 | Total: 0</p>
+
+        <!-- Reps and Toggle Container -->
+        <div class="reps-toggle-container">
+          <p id="reps">Left: 0 | Right: 0 | Total: 0</p>
+          <!-- Landmark Toggle with Label -->
+          <div class="toggle-wrapper">
+            <label for="landmarksToggle" class="toggle-label"
+              >Show Landmarks</label
+            >
+            <label class="switch" title="Show/Hide Pose Landmarks">
+              <input type="checkbox" id="landmarksToggle" checked />
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+
         <p id="stage">Stage: -</p>
         <p id="warning"></p>
         <progress id="progress" value="0" max="100"></progress>

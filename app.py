@@ -125,6 +125,7 @@ last_spoken_feedback = ""
 last_spoken_time = 0
 last_spoken_rep = 0
 workout_start_time = None
+show_landmarks = True  # Global state for landmark visibility
 
 # --- History File ---
 HISTORY_FILE = 'data/workout_history.csv'
@@ -178,21 +179,25 @@ def generate_frames():
             # 'processed_image' will hold the frame that gets displayed.
             processed_image = frame.copy()
 
+            # --- Always-on Pose Detection and Landmark Drawing ---
+            # Detect pose first on the raw frame.
+            # The detector returns the image it processed, which we can draw on.
+            processed_image, results = detector.detect(processed_image)
+            landmarks_visible = results.pose_landmarks and are_landmarks_visible(
+                results.pose_landmarks)
+
+            # Draw landmarks if the toggle is on, regardless of workout state.
+            if show_landmarks:
+                detector.draw_landmarks(processed_image, results)
+
             if is_workout_active:
                 # --- Bicep Curls Logic ---
                 if current_exercise == 'bicep_curls' and isinstance(exercise_handler, CurlCounter):
                     yolo_results = yolo_model(processed_image, verbose=False)
-                    dumbbell_detected = any(
-                        len(r.boxes) > 0 for r in yolo_results)
-                    form_warning = ""
-
-                    processed_image, results = detector.detect(processed_image)
-                    landmarks_visible = results.pose_landmarks and are_landmarks_visible(
-                        results.pose_landmarks)
 
                     if landmarks_visible:
                         exercise_handler.process(
-                            processed_image, results.pose_landmarks.landmark)
+                            processed_image, results.pose_landmarks.landmark)  # This method doesn't modify the image
                         left, right = exercise_handler.left_counter, exercise_handler.right_counter
                         total = min(left, right)
                         stats["left"], stats["right"], stats["total"] = left, right, total
@@ -226,6 +231,9 @@ def generate_frames():
                     elif results.pose_landmarks:
                         form_warning = "Please make sure your full upper body is visible."
 
+                    dumbbell_detected = any(
+                        len(r.boxes) > 0 for r in yolo_results)
+
                     if not dumbbell_detected:
                         stats["warning"] = "⚠ Please pick up your dumbbell!"
                     else:
@@ -233,9 +241,12 @@ def generate_frames():
 
                 # --- Squats Logic ---
                 elif current_exercise == 'squats' and isinstance(exercise_handler, SquatCorrector):
-                    processed_image, rep_count, stage, form_warning = exercise_handler.process_frame(
-                        processed_image)
+                    # The process_frame method in SquatCorrector already draws landmarks.
+                    # We pass `draw_landmarks=False` because we are now handling drawing outside this method.
+                    _, rep_count, stage, form_warning = exercise_handler.process_frame(
+                        frame, draw_landmarks=False)
                     total = rep_count
+
                     stats["total"] = total
                     stats["stage"] = stage
                     stats["warning"] = form_warning
@@ -552,6 +563,16 @@ def set_target_reps():
         TARGET_REPS = int(new_target)
         last_spoken_rep = 0  # Reset rep count to avoid confusion
     return jsonify({"status": "Target updated", "new_target": TARGET_REPS})
+
+
+@app.route('/toggle_landmarks', methods=['POST'])
+def toggle_landmarks():
+    """Sets the server-side state for showing/hiding landmarks."""
+    global show_landmarks
+    data = request.get_json()
+    show_landmarks = data.get('show', True)
+    print(f"Landmark visibility set to: {show_landmarks}")
+    return jsonify({"status": "success", "show_landmarks": show_landmarks})
 
 
 @app.route('/delete_entry', methods=['POST'])

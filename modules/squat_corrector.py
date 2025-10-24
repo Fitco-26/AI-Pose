@@ -376,7 +376,7 @@ class SquatCorrector:
 
     # ---------------- Main public API ----------------
 
-    def process_frame(self, frame):
+    def process_frame(self, frame, draw_landmarks=True):
         """
         Processes a single frame; returns (image, rep_count, stage, form_feedback).
         Also records per-frame metrics into self.recording.
@@ -412,13 +412,14 @@ class SquatCorrector:
                 t, knee_angle, back_angle, shoulder, hip, knee, ankle, foot_index, visibility_score, other_knee)
 
             # Visual aids: draw pose
-            mp_drawing.draw_landmarks(
-                image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
-                mp_drawing.DrawingSpec(
-                    color=(0, 255, 0), thickness=2, circle_radius=2),
-                mp_drawing.DrawingSpec(
-                    color=(255, 0, 255), thickness=2, circle_radius=2)
-            )
+            if draw_landmarks:
+                mp_drawing.draw_landmarks(
+                    image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
+                    mp_drawing.DrawingSpec(
+                        color=(0, 255, 0), thickness=2, circle_radius=2),
+                    mp_drawing.DrawingSpec(
+                        color=(255, 0, 255), thickness=2, circle_radius=2)
+                )
 
             # Generate a friendly top-level feedback for UI (aggregate recent error)
             recent_errors = set()

@@ -130,6 +130,21 @@ targetRepsInput.addEventListener('change', (event) => {
     }
 });
 
+// --- Landmark Toggle ---
+const landmarksToggle = document.getElementById("landmarksToggle");
+
+landmarksToggle.addEventListener('change', (event) => {
+    const showLandmarks = event.target.checked;
+    fetch('/toggle_landmarks', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ show: showLandmarks }),
+    });
+});
+
+
 // ----------------------- Layout / Resizer -----------------------
 const videoPanel = document.getElementById("videoPanel");
 const statsPanel = document.getElementById("statsPanel");
