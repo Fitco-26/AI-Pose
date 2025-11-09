@@ -225,8 +225,16 @@ def generate_frames():
                             elif current_rep_count == TARGET_REPS:
                                 speak_async("Great set! Take a rest!")
 
-                        stats["progress"] = map_angle_to_progress(
-                            exercise_handler.right_angle)
+                        # Update progress based on the active arm
+                        if exercise_handler.left_stage == 'up':
+                            stats["progress"] = map_angle_to_progress(
+                                exercise_handler.left_angle)
+                        elif exercise_handler.right_stage == 'up':
+                            stats["progress"] = map_angle_to_progress(
+                                exercise_handler.right_angle)
+                        else:
+                            # If both arms are down, progress is 0
+                            stats["progress"] = 0
 
                     elif results.pose_landmarks:
                         form_warning = "Please make sure your full upper body is visible."
