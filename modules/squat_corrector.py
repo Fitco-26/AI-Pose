@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import mediapipe as mp
 import pyttsx3
+import mysql.connector
 import threading
 import time
 import csv

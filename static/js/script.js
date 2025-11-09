@@ -104,8 +104,48 @@ function hideIntro() {
     introVideo.currentTime = 0; // Reset video for next time
 }
 
-function stopWorkout() {
-    fetch('/stop', { method: "POST" });
+async function stopWorkout() {
+    try {
+        const response = await fetch('/stop', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.status === 'stopped' && data.summary) {
+            const s = data.summary;
+            showSessionPopup(s.exercise, s.total_reps, s.avg_angle, s.improvement_percent, s.feedback);
+        } else {
+            console.log("Workout stopped, but no summary was returned.");
+            // Optionally, just redirect or show a simple message
+            // alert("Workout stopped.");
+        }
+    } catch (err) {
+        console.error("Error stopping exercise:", err);
+        alert("Something went wrong while stopping the workout.");
+    }
+}
+
+function showSessionPopup(exercise, reps, avgAngle, improvement, feedback) {
+    const popup = document.createElement("div");
+    popup.innerHTML = `
+        <div style="
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #1f1f1f; color: #fff; border-radius: 12px;
+            padding: 24px 32px; text-align: center;
+            box-shadow: 0 0 25px rgba(0,0,0,0.4); z-index: 9999;
+            width: 90%; max-width: 400px; border: 1px solid rgba(255,255,255,0.1);
+        ">
+            <h2 style="margin-bottom: 15px; font-size: 22px; color: #00ff99;">🏋️ ${exercise.toUpperCase()} Summary</h2>
+            <p style="margin: 8px 0; font-size: 1.1rem;">Reps: <b style="color: #fff;">${reps}</b></p>
+            <p style="margin: 8px 0; font-size: 1.1rem;">Average Angle: <b style="color: #fff;">${avgAngle.toFixed(1)}°</b></p>
+            <p style="margin: 8px 0; font-size: 1.1rem;">Improvement: <b style="color: #fff;">${improvement.toFixed(2)}%</b></p>
+            <p style="margin-top: 15px; font-style: italic; color: #ccc;">"${feedback}"</p>
+            <button onclick="this.parentElement.parentElement.remove()" style="
+                margin-top: 20px; background: #00ff99; color: #000;
+                border: none; padding: 12px 20px; border-radius: 8px;
+                cursor: pointer; font-size: 16px; font-weight: 600;
+            ">Close</button>
+        </div>
+    `;
+    document.body.appendChild(popup);
 }
 
 // Event Listeners for the intro video and workout controls

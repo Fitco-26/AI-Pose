@@ -96,8 +96,10 @@
                   data-sort-col="3"
                   data-sort-type="number"
                 >
-                  Duration (seconds) <span class="sort-indicator"></span>
+                  Duration (sec) <span class="sort-indicator"></span>
                 </th>
+                <th>Avg Angle</th>
+                <th>Feedback</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -113,6 +115,8 @@
                 <td>{{ entry.exercise }}</td>
                 <td>{{ entry.reps }}</td>
                 <td>{{ entry.duration_seconds }}</td>
+                <td>{{ entry.avg_angle }}</td>
+                <td>{{ entry.feedback }}</td>
                 <td>
                   <button
                     class="delete-btn"

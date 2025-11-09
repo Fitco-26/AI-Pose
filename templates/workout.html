@@ -73,7 +73,7 @@
         </div>
         <!-- Dashboard Button -->
         <div class="button-container dashboard-button-container">
-          <button id="dashboardButton" onclick="location.href='/'">
+          <button id="dashboardButton" onclick="releaseAndGoBack()">
             Back to Dashboard
           </button>
         </div>
@@ -85,5 +85,23 @@
       const EXERCISE_ID = "{{ exercise_id }}";
     </script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script>
+      async function releaseAndGoBack() {
+        try {
+          await fetch("/release_camera", { method: "POST" });
+          console.log("Camera released before returning to dashboard");
+        } catch (err) {
+          console.warn("Camera release failed:", err);
+        }
+        window.location.href = "/select_exercise";
+      }
+
+      // Add a listener to release the camera if the user closes the tab/browser
+      window.addEventListener("beforeunload", () => {
+        // Use sendBeacon for reliability on page exit
+        navigator.sendBeacon("/release_camera", new Blob());
+        console.log("Sent camera release signal on page unload.");
+      });
+    </script>
   </body>
 </html>

@@ -12,14 +12,26 @@ import pyttsx3
 import threading
 import time
 from datetime import datetime, timedelta
+import mysql.connector
 import atexit
 import json
 import csv
 import os
+import queue
 
 app = Flask(__name__)
 # Necessary for session management
 app.secret_key = 'your_very_secret_key_for_sessions'
+
+# --- MySQL Database Connection ---
+db = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="Mokshith15@",
+    database="fitness_tracker"
+)
+cursor = db.cursor(dictionary=True)
+
 
 # --- Config Management (with Profiles) ---
 CONFIG_FILE = 'config.json'
@@ -52,46 +64,96 @@ app.config['APP_CONFIG'] = load_config()
 
 # --- TTS Engine Setup ---
 tts_engine = pyttsx3.init()
+speech_queue = queue.Queue()
+tts_lock = threading.Lock()
+
+
+def tts_worker():
+    """Runs continuously in a background thread to handle queued speech."""
+    while True:
+        text = speech_queue.get()  # Wait for text
+        if text is None:  # Exit signal
+            break
+        with tts_lock:
+            try:
+                tts_engine.say(text)
+                tts_engine.runAndWait()
+            except Exception as e:
+                print(f"TTS error: {e}")
+        speech_queue.task_done()
+
+
+# Start the single background TTS thread
+tts_thread = threading.Thread(target=tts_worker, daemon=True)
+tts_thread.start()
 
 
 def speak_async(text):
-    """Run TTS in a separate thread to avoid blocking the main app."""
+    """Adds speech text to the queue instead of creating new threads."""
     if not app.config['APP_CONFIG'].get('speak_feedback', True):
         return
-
-    def run():
-        tts_engine.say(text)
-        tts_engine.runAndWait()
-    thread = threading.Thread(target=run)
-    thread.start()
+    if text and isinstance(text, str):
+        speech_queue.put(text)
 
 
 # --- Camera Management ---
 _camera_instance = None
 _camera_lock = threading.Lock()
+_active_clients = 0
+_camera_active = False
 
 
 def get_camera():
     """Initializes or returns the global camera instance."""
-    global _camera_instance
+    global _camera_instance, _active_clients, _camera_active
+
     with _camera_lock:
-        if _camera_instance is None:
+        # If camera is None or not opened, reinitialize
+        if _camera_instance is None or not hasattr(_camera_instance, "isOpened") or not _camera_instance.isOpened():
+            print("♻️ Reinitializing camera...")
             camera_index = app.config['APP_CONFIG'].get('camera_index', 0)
-            _camera_instance = cv2.VideoCapture(camera_index)
+            _camera_instance = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+            time.sleep(0.5)  # give hardware a moment
             if not _camera_instance.isOpened():
-                print("Error: Could not open video stream.")
-                _camera_instance = None  # Ensure it's None if opening fails
+                print("❌ Error: Could not open video stream.")
+                _camera_instance = None
+                _camera_active = False
+                return None
+            else:
+                _camera_active = True
+                print("🎥 Camera opened successfully (reinitialized).")
+
+        _active_clients += 1
         return _camera_instance
 
 
 def release_camera():
     """Releases the global camera instance."""
-    global _camera_instance
+    global _camera_instance, _active_clients, _camera_active
     with _camera_lock:
-        if _camera_instance is not None:
+        _camera_active = False  # ✅ Signal frame loop to stop
+        _active_clients = max(0, _active_clients - 1)
+        if _active_clients == 0 and _camera_instance is not None:
             _camera_instance.release()
             _camera_instance = None
-            print("Camera released.")
+            print("✅ Camera fully released at hardware level.")
+
+            # ✅ Additional hardware cleanup
+            try:
+                cv2.destroyAllWindows()
+                cv2.waitKey(1)
+                print("🧹 OpenCV windows and buffers destroyed.")
+            except Exception as e:
+                print("⚠️ OpenCV cleanup failed:", e)
+
+            # ✅ Force backend reset (final hardware handle release)
+            try:
+                tmp_cap = cv2.VideoCapture(
+                    app.config['APP_CONFIG'].get('camera_index', 0))
+                tmp_cap.release()
+                print("🔁 Verified hardware handle released.")
+            except Exception as e:
+                print("⚠️ Verification camera release failed:", e)
 
 
 # Register cleanup to ensure camera is released on app exit
@@ -126,25 +188,26 @@ last_spoken_time = 0
 last_spoken_rep = 0
 workout_start_time = None
 show_landmarks = True  # Global state for landmark visibility
-
+ENABLE_CSV_BACKUP = False  # Optional CSV backup (disabled by default)
 # --- History File ---
 HISTORY_FILE = 'data/workout_history.csv'
 
 # --- Landmark Visibility Check ---
 
 
-def are_landmarks_visible(landmarks, visibility_threshold=0.7):
-    """Checks if essential landmarks for bicep curls are visible."""
-    # Define the essential landmarks for bicep curls
+def are_landmarks_visible(landmarks, visibility_threshold=0.5):
+    """
+    Checks if essential landmarks for bicep curls are visible.
+    Lowered threshold to 0.5 to make detection more robust,
+    especially for partial right-arm occlusions.
+    """
     required_landmarks = [
         mp.solutions.pose.PoseLandmark.LEFT_SHOULDER,
         mp.solutions.pose.PoseLandmark.LEFT_ELBOW,
         mp.solutions.pose.PoseLandmark.LEFT_WRIST,
-        mp.solutions.pose.PoseLandmark.LEFT_HIP,
         mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER,
         mp.solutions.pose.PoseLandmark.RIGHT_ELBOW,
         mp.solutions.pose.PoseLandmark.RIGHT_WRIST,
-        mp.solutions.pose.PoseLandmark.RIGHT_HIP,
     ]
     for landmark_index in required_landmarks:
         if landmarks.landmark[landmark_index.value].visibility < visibility_threshold:
@@ -155,33 +218,47 @@ def are_landmarks_visible(landmarks, visibility_threshold=0.7):
 
 
 def generate_frames():
-    global stats, is_workout_active, last_spoken_feedback, last_spoken_time, last_spoken_rep, exercise_handler, current_exercise
+    global stats, is_workout_active, last_spoken_feedback, last_spoken_time, last_spoken_rep, exercise_handler, current_exercise, _camera_active
 
-    cap = get_camera()
-    if cap is None:
-        # Placeholder for camera error
-        blank_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(blank_frame, "CAMERA ERROR", (180, 240),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
-        _, buffer = cv2.imencode('.jpg', blank_frame)
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-        return
+    while True:
+        if not _camera_active:
+            print("🛑 Stopping frame generation — camera released.")
+            try:
+                if _camera_instance:
+                    _camera_instance.release()
+                    print("🔒 Camera capture forcibly closed inside generator.")
+            except Exception as e:
+                print("⚠️ Camera cleanup inside generator failed:", e)
+            break
 
-    try:
-        while True:
+        try:
+            cap = get_camera()
+            if not _camera_active or cap is None or not cap.isOpened():
+                print("⚠️ Camera not ready, retrying initialization...")
+                time.sleep(0.2)
+                # Send a placeholder frame
+                cap = get_camera()
+                if cap is None or not cap.isOpened():
+                    blank_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                    cv2.putText(blank_frame, "Camera not available", (50, 240),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+                _, buffer = cv2.imencode('.jpg', blank_frame)
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                continue
             ret, frame = cap.read()
             if not ret:
-                print("Error: Failed to grab frame.")
-                break
+                print("Warning: Failed to read frame. Retrying...")
+                time.sleep(0.1)
+                continue
 
-            # Always display the live camera feed.
-            # 'processed_image' will hold the frame that gets displayed.
+            # 🔄 Flip the frame *before* detection for correct handedness
+            frame = cv2.flip(frame, 1)
+
             processed_image = frame.copy()
 
             # --- Always-on Pose Detection and Landmark Drawing ---
-            # Detect pose first on the raw frame.
-            # The detector returns the image it processed, which we can draw on.
             processed_image, results = detector.detect(processed_image)
             landmarks_visible = results.pose_landmarks and are_landmarks_visible(
                 results.pose_landmarks)
@@ -190,14 +267,21 @@ def generate_frames():
             if show_landmarks:
                 detector.draw_landmarks(processed_image, results)
 
+            # ✅ Optional: draw debug elbow angles on screen
+            if is_workout_active and isinstance(exercise_handler, CurlCounter) and results.pose_landmarks:
+                cv2.putText(processed_image, f"L:{int(exercise_handler.left_angle)}°",
+                            (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                cv2.putText(processed_image, f"R:{int(exercise_handler.right_angle)}°",
+                            (450, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
             if is_workout_active:
                 # --- Bicep Curls Logic ---
                 if current_exercise == 'bicep_curls' and isinstance(exercise_handler, CurlCounter):
-                    yolo_results = yolo_model(processed_image, verbose=False)
+                    yolo_results = yolo_model(frame, verbose=False)
 
                     if landmarks_visible:
                         exercise_handler.process(
-                            processed_image, results.pose_landmarks.landmark)  # This method doesn't modify the image
+                            frame, results.pose_landmarks.landmark)  # This method doesn't modify the image
                         left, right = exercise_handler.left_counter, exercise_handler.right_counter
                         total = min(left, right)
                         stats["left"], stats["right"], stats["total"] = left, right, total
@@ -225,15 +309,20 @@ def generate_frames():
                             elif current_rep_count == TARGET_REPS:
                                 speak_async("Great set! Take a rest!")
 
-                        # Update progress based on the active arm
-                        if exercise_handler.left_stage == 'up':
+                        # 🧮 Balanced progress logic: handles both arms fairly
+                        if exercise_handler.left_stage == 'up' and exercise_handler.right_stage == 'up':
+                            stats["progress"] = (
+                                map_angle_to_progress(exercise_handler.left_angle) +
+                                map_angle_to_progress(
+                                    exercise_handler.right_angle)
+                            ) / 2
+                        elif exercise_handler.left_stage == 'up':
                             stats["progress"] = map_angle_to_progress(
                                 exercise_handler.left_angle)
                         elif exercise_handler.right_stage == 'up':
                             stats["progress"] = map_angle_to_progress(
                                 exercise_handler.right_angle)
                         else:
-                            # If both arms are down, progress is 0
                             stats["progress"] = 0
 
                     elif results.pose_landmarks:
@@ -304,18 +393,22 @@ def generate_frames():
                     last_spoken_feedback = ""
 
             # Encode frame for streaming
-            frame_to_send = cv2.flip(processed_image, 1)
-            _, buffer = cv2.imencode('.jpg', frame_to_send)
+            _, buffer = cv2.imencode('.jpg', processed_image)
             frame_bytes = buffer.tobytes()
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-    except Exception as e:
-        print(f"Error in generate_frames: {e}")
-    finally:
-        release_camera()  # Ensure camera is released when the generator exits
-
+        except Exception as e:
+            print(f"⚠️ Frame processing error (continuing): {e}")
+            # Don't break; just skip the frame and continue the loop
+            continue
+        except GeneratorExit:
+            # This is triggered when the client disconnects (e.g., closes tab)
+            print("Client disconnected. Releasing camera.")
+            break
 
 # --- Routes ---
+
+
 @app.route('/')
 def index():
     # On first launch, ensure TARGET_REPS is initialized from config
@@ -366,10 +459,22 @@ def dashboard_data():
 @app.route('/select_exercise')
 def select_exercise():
     """Renders the page for selecting an exercise."""
-    # --- Camera Warm-up ---
-    # Start initializing the camera in the background as soon as the user
-    # lands on this page. This prevents the delay when the workout starts.
-    threading.Thread(target=get_camera, daemon=True).start()
+
+    # Find the last time each exercise was performed
+    last_performed = {}
+    try:
+        cursor.execute("""
+            SELECT et.exercise_name, MAX(s.date_time) AS last_time
+            FROM sessions s
+            JOIN exercise_targets et ON s.exercise_id = et.exercise_id
+            GROUP BY et.exercise_name
+        """)
+        results = cursor.fetchall()
+        for row in results:
+            last_performed[row['exercise_name'].replace(
+                '_', ' ').title()] = row['last_time'].strftime("%Y-%m-%d")
+    except Exception as e:
+        print("⚠️ Error fetching last performed data:", e)
 
     # Define available exercises
     available_exercises = [
@@ -377,21 +482,6 @@ def select_exercise():
         {'id': 'squats', 'name': 'Squats', 'disabled': False},
         {'id': 'push_ups', 'name': 'Push-ups', 'disabled': True},
     ]
-
-    # Find the last time each exercise was performed
-    last_performed = {}
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, 'r', newline='') as f:
-            # Read history into a list to sort it
-            reader = csv.DictReader(f)
-            history_list = sorted(list(reader), key=lambda x: x.get(
-                'timestamp', ''), reverse=True)
-
-            for entry in history_list:
-                exercise_name = entry.get('exercise')
-                if exercise_name and exercise_name not in last_performed:
-                    last_performed[exercise_name] = entry.get(
-                        'timestamp', '').split(' ')[0]
 
     # Add the 'last_performed' date to each exercise
     for exercise in available_exercises:
@@ -442,6 +532,10 @@ def workout():
     global current_exercise, TARGET_REPS
     current_exercise = request.args.get('exercise', 'bicep_curls')
     TARGET_REPS = app.config['APP_CONFIG'].get('default_target_reps', 15)
+
+    # ✅ Open camera only when workout page loads
+    get_camera()
+
     # Pass exercise info to the template
     exercise_name = current_exercise.replace('_', ' ').title()
     intro_video_path = 'Video/Video_Refinement_Request (1).mp4'
@@ -452,24 +546,48 @@ def workout():
 
 @app.route('/video_feed')
 def video_feed():
-    return Response(generate_frames(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+    global _camera_active
+    cap = get_camera()
+    if cap is None:
+        print("❌ Could not start video feed — camera unavailable.")
+        return Response(status=500)
+
+    _camera_active = True
+    print("🎥 /video_feed started — camera active.")
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
 @app.route('/history')
 def history():
     history_data = []
     unique_exercises = set()
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, 'r', newline='') as f:
-            reader = csv.DictReader(f)
-            history_list = list(reader)
-            # Reverse the list to show the most recent workouts first
-            history_data = sorted(
-                history_list, key=lambda x: x['timestamp'], reverse=True)
-            for entry in history_list:
-                if entry.get('exercise'):
-                    unique_exercises.add(entry['exercise'])
+
+    try:
+        # 1. Read from MySQL (unified sessions)
+        cursor.execute("""
+            SELECT s.date_time, et.exercise_name, s.total_reps, s.duration_seconds, s.avg_angle, s.feedback
+            FROM sessions s
+            JOIN exercise_targets et ON s.exercise_id = et.exercise_id
+            ORDER BY s.date_time DESC
+        """)
+        db_history = cursor.fetchall()
+        for row in db_history:
+            exercise_name = row['exercise_name'].replace('_', ' ').title()
+            unique_exercises.add(exercise_name)
+            history_data.append({
+                'timestamp': row['date_time'].strftime("%Y-%m-%d %H:%M:%S"),
+                'exercise': exercise_name,
+                'reps': row['total_reps'],
+                'duration_seconds': row['duration_seconds'],
+                'avg_angle': f"{row['avg_angle']:.1f}°" if row.get('avg_angle') else 'N/A',
+                'feedback': row.get('feedback', 'N/A')
+            })
+
+        # Sort newest first
+        history_data.sort(key=lambda x: x['timestamp'], reverse=True)
+
+    except Exception as e:
+        print(f"❌ Error fetching history: {e}")
 
     return render_template('history.html', history=history_data, unique_exercises=list(unique_exercises))
 
@@ -525,16 +643,97 @@ def start_workout():
     return jsonify({"status": "Workout started"})
 
 
+def store_session_in_db(exercise_handler, user_id=1, exercise_name='squats'):
+    """
+    Universal DB storage function for all exercises.
+    Handles Squats and Bicep Curls (and future ones).
+    """
+    try:
+        if exercise_handler is None:
+            print("store_session_in_db: exercise_handler is None -> skipping.")
+            return
+
+        summary = exercise_handler.get_session_summary()
+        print(f"store_session_in_db summary for {exercise_name}:", summary)
+
+        # Get exercise_id dynamically from DB
+        cursor.execute(
+            "SELECT exercise_id FROM exercise_targets WHERE exercise_name=%s", (exercise_name,))
+        row = cursor.fetchone()
+        if not row:
+            print(f"⚠ No exercise_id found for {exercise_name}")
+            return {}
+        exercise_id = row['exercise_id']
+
+        # Collect angle data if available (Squats / Curls)
+        angle_key = 'knee_angle' if exercise_name == 'squats' else 'elbow_angle'
+        angles = [r[angle_key] for r in getattr(
+            exercise_handler, 'recording', []) if r.get(angle_key)]
+        avg_angle = float(np.mean(angles)) if angles else None
+
+        duration_seconds = summary.get('session_time_sec', 0)
+        total_reps = summary.get('total_reps', 0)
+
+        feedback = summary.get('feedback', 'Good session!')
+        improvement_percent = 0.0
+
+        # Get last average for improvement %
+        cursor.execute("""
+            SELECT avg_angle FROM sessions 
+            WHERE user_id=%s AND exercise_id=%s 
+            ORDER BY date_time DESC LIMIT 1
+        """, (user_id, exercise_id))
+        last = cursor.fetchone()
+        if last and last['avg_angle']:
+            improvement_percent = (
+                (avg_angle - last['avg_angle']) / last['avg_angle']) * 100
+
+        # Save session
+        cursor.execute("""
+            INSERT INTO sessions (user_id, exercise_id, date_time, total_reps, avg_angle, improvement_percent, feedback, duration_seconds)
+            VALUES (%s, %s, NOW(), %s, %s, %s, %s, %s)
+        """, (user_id, exercise_id, total_reps, avg_angle, improvement_percent, feedback, duration_seconds))
+        db.commit()
+        session_id = cursor.lastrowid
+
+        # Save rep data (generic)
+        rep_count = 0
+        for i, r in enumerate(getattr(exercise_handler, 'recording', []), start=1):
+            if r.get(angle_key):
+                cursor.execute("""
+                    INSERT INTO rep_data (session_id, rep_number, angle, timestamp)
+                    VALUES (%s, %s, %s, NOW())
+                """, (session_id, i, r[angle_key]))
+                rep_count += 1
+        db.commit()
+
+        print(
+            f"✅ Stored {exercise_name} session ID {session_id}: {total_reps} reps, avg {avg_angle}°")
+
+        return {
+            "session_id": session_id,
+            "avg_angle": avg_angle,
+            "improvement_percent": improvement_percent,
+            "feedback": feedback,
+            "total_reps": total_reps
+        }
+
+    except Exception as e:
+        print("❌ DB Error in store_session_in_db:", e)
+        return {}
+
+
 @app.route('/stop', methods=['POST'])
-def stop_workout():
+def stop_exercise():
     global is_workout_active, workout_start_time, stats, current_exercise, exercise_handler
     is_workout_active = False
+    session_info = {}
 
-    # If there's a handler with a release method, call it
-    if hasattr(exercise_handler, 'release'):
-        exercise_handler.release()
-    exercise_handler = None
+    # Debug: show current state
+    print("STOP called. current_exercise:", current_exercise)
+    print("exercise_handler is None?", exercise_handler is None)
 
+    # Save time & stats (computed even if handler is None)
     if workout_start_time:
         duration = time.time() - workout_start_time
         total_reps = stats.get('total', 0)
@@ -542,24 +741,66 @@ def stop_workout():
             '_', ' ').title() if current_exercise else "Unknown Exercise"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Ensure data directory exists
-        os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+        # ✅ NEW DEBUG LOG: show if we will attempt DB save
+        print(
+            f"Attempting to save session: exercise={exercise_name}, reps={total_reps}, duration={round(duration)}s")
 
-        # Write to CSV
-        file_exists = os.path.isfile(HISTORY_FILE)
-        with open(HISTORY_FILE, 'a', newline='') as f:
-            writer = csv.writer(f)
-            # Write header if file is new
-            if not file_exists:
-                writer.writerow(
-                    ['timestamp', 'exercise', 'reps', 'duration_seconds'])
-            # Write workout data
-            writer.writerow([timestamp, exercise_name,
-                            total_reps, round(duration)])
+        if exercise_handler:
+            print(f"Analyzing and saving {current_exercise} session...")
+            session_info = store_session_in_db(
+                exercise_handler, user_id=1, exercise_name=current_exercise)
+        else:
+            print("No valid exercise handler, skipping DB save.")
+
+        # Optional CSV backup (disabled by default)
+        if ENABLE_CSV_BACKUP:
+            os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+            file_exists = os.path.isfile(HISTORY_FILE)
+            with open(HISTORY_FILE, 'a', newline='') as f:
+                writer = csv.writer(f)
+                if not file_exists:
+                    writer.writerow(
+                        ['timestamp', 'exercise', 'reps', 'duration_seconds'])
+                writer.writerow([timestamp, exercise_name,
+                                total_reps, round(duration)])
 
         workout_start_time = None  # Reset start time
 
-    return jsonify({"status": "Workout stopped"})
+    # ---- After workout is saved ----
+    # Initialize summary to an empty dict for safety
+    summary_from_handler = {}
+    if exercise_handler:
+        try:
+            # This assumes your handler has a method like get_session_summary()
+            summary_from_handler = exercise_handler.get_session_summary()
+            print("store_session_in_db: summary:", summary_from_handler)
+        except Exception as e:
+            print(f"⚠️ Error getting session summary from handler: {e}")
+            # summary_from_handler remains {}
+
+    if exercise_handler:  # Still need this check for cleanup and specific return status
+        # Clean up
+        if hasattr(exercise_handler, 'release'):
+            exercise_handler.release()
+        exercise_handler = None
+        current_exercise = None
+
+        # Send summary to frontend
+        return jsonify({
+            "status": "stopped",
+            "message": "Session saved successfully!",
+            "summary": {
+                "exercise": summary_from_handler.get("exercise", "unknown"),
+                "total_reps": summary_from_handler.get("total_reps", 0),
+                "avg_angle": session_info.get("avg_angle", 0),
+                "improvement_percent": session_info.get("improvement_percent", 0),
+                "feedback": summary_from_handler.get("feedback", session_info.get("feedback", "Well done!"))
+            }
+        })
+    else:
+        print("exercise_handler is None, cannot generate summary.")
+        # Reset handler reference just in case
+        return jsonify({"status": "no_active_exercise"})
 
 
 @app.route('/set_target_reps', methods=['POST'])
@@ -583,30 +824,56 @@ def toggle_landmarks():
     return jsonify({"status": "success", "show_landmarks": show_landmarks})
 
 
+@app.route('/release_camera', methods=['POST'])
+def release_camera_route():
+    """Explicitly release the global camera when leaving the workout page."""
+    try:
+        release_camera()
+        print("✅ Camera released manually via /release_camera.")
+        return jsonify({"status": "success", "message": "Camera released."})
+    except Exception as e:
+        print("⚠️ Error releasing camera:", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route('/delete_entry', methods=['POST'])
 def delete_entry():
-    data = request.get_json()
-    timestamp_to_delete = data.get('timestamp')
+    try:
+        data = request.get_json()
+        timestamp_to_delete = data.get('timestamp')
 
-    if not timestamp_to_delete or not os.path.exists(HISTORY_FILE):
-        return jsonify({"status": "error", "message": "Invalid request or file not found"}), 400
+        if not timestamp_to_delete:
+            return jsonify({"status": "error", "message": "No timestamp provided"}), 400
 
-    # Read all entries except the one to be deleted
-    updated_history = []
-    with open(HISTORY_FILE, 'r', newline='') as f:
-        reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
-        for row in reader:
-            if row['timestamp'] != timestamp_to_delete:
-                updated_history.append(row)
+        print(f"🕒 Attempting to delete entry at: {timestamp_to_delete}")
 
-    # Rewrite the CSV file with the updated history
-    with open(HISTORY_FILE, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(updated_history)
+        # Use flexible timestamp comparison (±1 sec)
+        cursor.execute("""
+            SELECT session_id FROM sessions 
+            WHERE ABS(TIMESTAMPDIFF(SECOND, date_time, %s)) <= 1
+        """, (timestamp_to_delete,))
+        session = cursor.fetchone()
 
-    return jsonify({"status": "success", "message": "Entry deleted"})
+        if not session:
+            print(f"⚠ No session found for timestamp: {timestamp_to_delete}")
+            return jsonify({"status": "error", "message": f"No matching session found for {timestamp_to_delete}"}), 404
+
+        session_id = session['session_id']
+
+        # Delete from child tables first (rep_data → sessions)
+        cursor.execute(
+            "DELETE FROM rep_data WHERE session_id = %s", (session_id,))
+        cursor.execute(
+            "DELETE FROM sessions WHERE session_id = %s", (session_id,))
+        db.commit()
+
+        print(f"🗑 Deleted session ID {session_id} successfully.")
+        return jsonify({"status": "success", "message": "Entry deleted from database"})
+
+    except Exception as e:
+        print("❌ Error deleting entry:", e)
+        db.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 if __name__ == "__main__":
