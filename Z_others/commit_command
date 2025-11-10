@@ -1,3 +1,4 @@
+'''
 git add .
 git commit -m "Your message"
 git push
@@ -13,3 +14,27 @@ yolo task=detect mode=train model=runs/detect/train3/weights/last.pt data=dumbbe
 
 #to start flask
 http://127.0.0.1:5000/
+
+
+#Database Verification
+mysql -u root -p
+USE fitness_tracker;
+SHOW TABLES;
+SELECT * FROM sessions;
+SELECT * FROM rep_data WHERE session_id = 1;
+
+SQUATS -> knee_angle = (hip, knee, ankle)
+| Phase             | Knee Angle (°)   | Description                        |
+| ----------------- | --------------   | ---------------------------------- |
+|   Standing (Up)   | ~160° - 175°     | Full extension                     |
+|   Bottom (Down)   | ~85° - 100°      | Thighs parallel to floor or deeper |
+
+BICEP CURLS ->(shoulder, elbow, wrist)
+| Phase                     | Elbow Angle (°)   | Description       |
+| ------------------------- | ---------------   | ----------------- |
+| **Down** (arm extended)   | ~160° - 175°      | Starting position |
+| **Up** (arm curled fully) | ~40° - 60°        | Top of rep        |
+
+
+
+'''

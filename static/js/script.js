@@ -27,20 +27,21 @@ function updateStats() {
       const repsEl = document.getElementById("reps");
 
       // --- UI Customization based on Exercise ---
-      if (typeof EXERCISE_ID !== 'undefined' && EXERCISE_ID === 'squats') {
+      if (typeof EXERCISE_ID !== "undefined" && EXERCISE_ID === "squats") {
         // For squats, show only total reps and hide other info.
         repsEl.innerText = `Total Reps: ${data.total}`;
         stageEl.innerText = `Stage: ${data.stage}`; // Show stage
-        stageEl.style.display = 'block';
-        warningEl.style.display = 'block'; // Show real-time warning text
-        errorLogContainer.style.display = 'block'; // Show the form feedback log
+        stageEl.style.display = "block";
+        warningEl.style.display = "block"; // Show real-time warning text
+        errorLogContainer.style.display = "block"; // Show the form feedback log
       } else {
         // Default behavior for bicep curls
         repsEl.innerText = `Left: ${data.left} | Right: ${data.right} | Total: ${data.total}`;
         stageEl.innerText = `Stage: ${data.stage}`;
-        stageEl.style.display = 'block';
-        warningEl.style.display = 'block';
-        if (errorLogContainer.style.display !== 'none') errorLogContainer.style.display = 'block';
+        stageEl.style.display = "block";
+        warningEl.style.display = "block";
+        if (errorLogContainer.style.display !== "none")
+          errorLogContainer.style.display = "block";
       }
 
       warningEl.innerText = data.warning;
@@ -48,11 +49,13 @@ function updateStats() {
       // --- Live Error Log Update ---
       // This section now runs on every update, not just at the end.
       if (data.error_log && data.error_log.length > 0) {
-        errorLogEl.innerHTML = "<strong>Form Feedback:</strong><br>" + data.error_log.join("<br>");
+        errorLogEl.innerHTML =
+          "<strong>Form Feedback:</strong><br>" + data.error_log.join("<br>");
       } else {
         // If the log is empty but the container is visible (i.e., workout started), show the default message.
         if (!errorLogContainer.classList.contains("hidden")) {
-            errorLogEl.innerHTML = "<strong>Form Feedback:</strong><br><span class='no-feedback'>No feedback yet. Keep up the great form!</span>";
+          errorLogEl.innerHTML =
+            "<strong>Form Feedback:</strong><br><span class='no-feedback'>No feedback yet. Keep up the great form!</span>";
         }
       }
 
@@ -82,108 +85,162 @@ const startButton = document.getElementById("startButton");
 const skipIntroButton = document.getElementById("skipIntroButton");
 
 function startWorkout() {
-    // Hide intro overlay if it's still visible, so the user sees the action start.
-    if (!introOverlay.classList.contains("hidden")) {
-        hideIntro();
-    }
+  // Hide intro overlay if it's still visible, so the user sees the action start.
+  if (!introOverlay.classList.contains("hidden")) {
+    hideIntro();
+  }
 
-    // Make the error log container visible and set its initial state.
-    const errorLogContainer = document.getElementById("errorLogContainer");
-    const errorLogEl = document.getElementById("errorLog");
-    errorLogContainer.classList.remove("hidden");
-    errorLogEl.innerHTML = "<strong>Form Feedback:</strong><br><span class='no-feedback'>No feedback yet. Keep up the great form!</span>";
+  // Make the error log container visible and set its initial state.
+  const errorLogContainer = document.getElementById("errorLogContainer");
+  const errorLogEl = document.getElementById("errorLog");
+  errorLogContainer.classList.remove("hidden");
+  errorLogEl.innerHTML =
+    "<strong>Form Feedback:</strong><br><span class='no-feedback'>No feedback yet. Keep up the great form!</span>";
 
-    // Start the actual workout on the backend
-    fetch('/start', { method: "POST" });
+  // Start the actual workout on the backend
+  fetch("/start", { method: "POST" });
 }
 
 function hideIntro() {
-    // Hide the overlay and stop the video
-    introOverlay.classList.add("hidden");
-    introVideo.pause();
-    introVideo.currentTime = 0; // Reset video for next time
+  // Hide the overlay and stop the video
+  introOverlay.classList.add("hidden");
+  introVideo.pause();
+  introVideo.currentTime = 0; // Reset video for next time
 }
 
 async function stopWorkout() {
-    try {
-        const response = await fetch('/stop', { method: 'POST' });
-        const data = await response.json();
+  try {
+    const response = await fetch("/stop", { method: "POST" });
+    const data = await response.json();
 
-        if (data.status === 'stopped' && data.summary) {
-            const s = data.summary;
-            showSessionPopup(s.exercise, s.total_reps, s.avg_angle, s.improvement_percent, s.feedback);
-        } else {
-            console.log("Workout stopped, but no summary was returned.");
-            // Optionally, just redirect or show a simple message
-            // alert("Workout stopped.");
-        }
-    } catch (err) {
-        console.error("Error stopping exercise:", err);
-        alert("Something went wrong while stopping the workout.");
+    if (data.status === "stopped" && data.summary) {
+      const s = data.summary;
+      showSessionPopup(
+        s.exercise || "Workout",
+        s.total_reps || 0,
+        s.avg_angle || 0,
+        s.improvement_percent || 0,
+        s.feedback || "Good session!",
+        s.explanation || "You did great — keep up the effort!"
+      );
+    } else {
+      // 🟢 Fallback popup if no proper summary was returned
+      showSessionPopup(
+        "Workout",
+        0,
+        0,
+        0,
+        "Workout stopped successfully.",
+        "Session ended — data not saved or exercise handler was inactive."
+      );
     }
+  } catch (err) {
+    console.error("Error stopping exercise:", err);
+    alert("Something went wrong while stopping the workout.");
+  }
 }
 
-function showSessionPopup(exercise, reps, avgAngle, improvement, feedback) {
-    const popup = document.createElement("div");
-    popup.innerHTML = `
-        <div style="
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #1f1f1f; color: #fff; border-radius: 12px;
-            padding: 24px 32px; text-align: center;
-            box-shadow: 0 0 25px rgba(0,0,0,0.4); z-index: 9999;
-            width: 90%; max-width: 400px; border: 1px solid rgba(255,255,255,0.1);
-        ">
-            <h2 style="margin-bottom: 15px; font-size: 22px; color: #00ff99;">🏋️ ${exercise.toUpperCase()} Summary</h2>
-            <p style="margin: 8px 0; font-size: 1.1rem;">Reps: <b style="color: #fff;">${reps}</b></p>
-            <p style="margin: 8px 0; font-size: 1.1rem;">Average Angle: <b style="color: #fff;">${avgAngle.toFixed(1)}°</b></p>
-            <p style="margin: 8px 0; font-size: 1.1rem;">Improvement: <b style="color: #fff;">${improvement.toFixed(2)}%</b></p>
-            <p style="margin-top: 15px; font-style: italic; color: #ccc;">"${feedback}"</p>
-            <button onclick="this.parentElement.parentElement.remove()" style="
-                margin-top: 20px; background: #00ff99; color: #000;
-                border: none; padding: 12px 20px; border-radius: 8px;
-                cursor: pointer; font-size: 16px; font-weight: 600;
-            ">Close</button>
-        </div>
-    `;
-    document.body.appendChild(popup);
+function showSessionPopup(
+  exercise,
+  reps,
+  avgAngle,
+  improvement,
+  feedback,
+  explanation
+) {
+  // --- Form Accuracy Calculation ---
+  const targetAngle = exercise.toLowerCase() === "squats" ? 100 : 45; // ideal targets
+  let deviation = Math.abs(avgAngle - targetAngle);
+  let formScore = Math.max(0, 100 - (deviation / targetAngle) * 100);
+  let formColor =
+    formScore > 85 ? "#00ff99" : formScore > 70 ? "#ffaa00" : "#ff4d4d";
+
+  formScore = Math.min(formScore, 100);
+  formScore += improvement * 0.2; // small influence of improvement%
+  formScore = Math.max(0, Math.min(100, formScore));
+
+  // --- Create popup container ---
+  const overlay = document.createElement("div");
+  overlay.className = "popup-overlay";
+  overlay.innerHTML = `
+      <div class="popup-container">
+          <h2>🏋️ ${exercise.toUpperCase()} Summary</h2>
+          <p>Reps: <b>${reps}</b></p>
+          <p>Average Angle: <b>${avgAngle.toFixed(1)}°</b></p>
+          <p>Improvement: <b>${improvement.toFixed(2)}%</b></p>
+          <p>🎯 Form Accuracy: 
+            <b style="color:${formColor};">${formScore.toFixed(1)}%</b>
+          </p>
+          <p class="feedback-text">"${feedback}"</p>
+
+          <div class="popup-button-group">
+              <button id="explainSummaryBtn" class="button" style="background: #333; color: #fff;">Explain</button>
+              <button id="closeSummaryBtn" class="button" style="background: #00ff99; color: #000;">Close</button>
+          </div>
+      </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Animate in
+  setTimeout(() => overlay.classList.add("visible"), 10);
+
+  const closePopup = () => {
+    overlay.classList.remove("visible");
+    setTimeout(() => overlay.remove(), 300);
+  };
+
+  overlay
+    .querySelector("#closeSummaryBtn")
+    .addEventListener("click", closePopup);
+  overlay.querySelector("#explainSummaryBtn").addEventListener("click", () => {
+    closePopup();
+    showExplanationPopup(
+      exercise,
+      reps,
+      avgAngle,
+      improvement,
+      feedback,
+      explanation
+    );
+  });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closePopup();
+  });
 }
 
 // Event Listeners for the intro video and workout controls
-startButton.addEventListener('click', startWorkout);
-skipIntroButton.addEventListener('click', hideIntro);
-introVideo.addEventListener('ended', hideIntro); // Auto-hide when video ends
-
+startButton.addEventListener("click", startWorkout);
+skipIntroButton.addEventListener("click", hideIntro);
 
 // --- Target Reps ---
 const targetRepsInput = document.getElementById("targetRepsInput");
 
-targetRepsInput.addEventListener('change', (event) => {
-    const newTarget = parseInt(event.target.value, 10);
-    if (newTarget > 0) {
-        fetch('/set_target_reps', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ target: newTarget }),
-        });
-    }
+targetRepsInput.addEventListener("change", (event) => {
+  const newTarget = parseInt(event.target.value, 10);
+  if (newTarget > 0) {
+    fetch("/set_target_reps", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ target: newTarget }),
+    });
+  }
 });
 
 // --- Landmark Toggle ---
 const landmarksToggle = document.getElementById("landmarksToggle");
 
-landmarksToggle.addEventListener('change', (event) => {
-    const showLandmarks = event.target.checked;
-    fetch('/toggle_landmarks', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ show: showLandmarks }),
-    });
+landmarksToggle.addEventListener("change", (event) => {
+  const showLandmarks = event.target.checked;
+  fetch("/toggle_landmarks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ show: showLandmarks }),
+  });
 });
-
 
 // ----------------------- Layout / Resizer -----------------------
 const videoPanel = document.getElementById("videoPanel");
@@ -192,50 +249,173 @@ const resizer = document.getElementById("resizer");
 
 let isResizing = false;
 
-resizer.addEventListener('mousedown', e => {
-    isResizing = true;
-    document.body.style.cursor = 'col-resize';
-    // Disable transitions during drag for immediate feedback
-    videoPanel.classList.add('no-transition');
-    statsPanel.classList.add('no-transition');
+resizer.addEventListener("mousedown", (e) => {
+  isResizing = true;
+  document.body.style.cursor = "col-resize";
+  // Disable transitions during drag for immediate feedback
+  videoPanel.classList.add("no-transition");
+  statsPanel.classList.add("no-transition");
 });
 
-document.addEventListener('mousemove', e => {
-    if (!isResizing) return;
+document.addEventListener("mousemove", (e) => {
+  if (!isResizing) return;
 
-    const container = videoPanel.parentNode;
-    const totalWidth = container.offsetWidth;
-    const resizerWidth = resizer.offsetWidth;
-    const gap = 10; // The gap value from CSS
+  const container = videoPanel.parentNode;
+  const totalWidth = container.offsetWidth;
+  const resizerWidth = resizer.offsetWidth;
+  const gap = 10; // The gap value from CSS
 
-    const newVideoFlex = (e.clientX - container.offsetLeft) / (totalWidth - resizerWidth - gap);
-    const newStatsFlex = 1 - newVideoFlex;
+  const newVideoFlex =
+    (e.clientX - container.offsetLeft) / (totalWidth - resizerWidth - gap);
+  const newStatsFlex = 1 - newVideoFlex;
 
-    videoPanel.style.flex = newVideoFlex;
-    statsPanel.style.flex = newStatsFlex;
+  videoPanel.style.flex = newVideoFlex;
+  statsPanel.style.flex = newStatsFlex;
 });
 
-document.addEventListener('mouseup', e => {
-    isResizing = false;
-    document.body.style.cursor = 'default';
-    // Re-enable transitions after drag is complete
-    videoPanel.classList.remove('no-transition');
-    statsPanel.classList.remove('no-transition');
+document.addEventListener("mouseup", (e) => {
+  isResizing = false;
+  document.body.style.cursor = "default";
+  // Re-enable transitions after drag is complete
+  videoPanel.classList.remove("no-transition");
+  statsPanel.classList.remove("no-transition");
 });
 
 // ----------------------- Double-click Fullscreen -----------------------
 let fullScreen = false;
-videoPanel.addEventListener('dblclick', () => {
-    if (!fullScreen) {
-        videoPanel.style.flex = "1 1 100%";
-        statsPanel.style.display = "none";
-        resizer.style.display = "none";
-        fullScreen = true;
-    } else {
-        videoPanel.style.flex = "7"; // Restore flex ratio
-        statsPanel.style.display = "block";
-        statsPanel.style.flex = "3"; // Restore flex ratio
-        resizer.style.display = "block";
-        fullScreen = false;
-    }
+videoPanel.addEventListener("dblclick", () => {
+  if (!fullScreen) {
+    videoPanel.style.flex = "1 1 100%";
+    statsPanel.style.display = "none";
+    resizer.style.display = "none";
+    fullScreen = true;
+  } else {
+    videoPanel.style.flex = "7"; // Restore flex ratio
+    statsPanel.style.display = "block";
+    statsPanel.style.flex = "3"; // Restore flex ratio
+    resizer.style.display = "block";
+    fullScreen = false;
+  }
 });
+// ----------------------- Dynamic Explanation Popup -----------------------
+function showExplanationPopup(
+  exercise,
+  reps,
+  avgAngle,
+  improvement,
+  feedback,
+  explanation
+) {
+  const improvementColor =
+    improvement > 0 ? "#00ff99" : improvement < 0 ? "#ff6b6b" : "#ffaa00";
+  const improvementEmoji =
+    improvement > 0 ? "✅" : improvement < 0 ? "⚠️" : "➖";
+  const fadeDuration = 300;
+
+  // --- Form Score Logic ---
+  const targetAngle = exercise.toLowerCase() === "squats" ? 100 : 45; // ideal targets
+  let deviation = Math.abs(avgAngle - targetAngle);
+  let formScore = Math.max(0, 100 - (deviation / targetAngle) * 100);
+  formScore = Math.min(formScore, 100);
+  formScore += improvement * 0.2; // small influence of improvement%
+  formScore = Math.max(0, Math.min(100, formScore));
+
+  const overlay = document.createElement("div");
+  overlay.className = "popup-overlay";
+
+  const popup = document.createElement("div");
+  popup.className = "popup-container explanation-popup"; // Use classes
+
+  popup.innerHTML = `
+      <h2>
+        📊 Detailed ${exercise.toUpperCase()} Breakdown
+      </h2>
+
+      <!-- Form Accuracy Bar -->
+      <div class="accuracy-bar-container">
+        <p>🎯 Form Accuracy: ${formScore.toFixed(1)}%</p>
+        <div class="accuracy-progress-bg">
+            <div class="accuracy-progress-fill" style="width: ${formScore.toFixed(
+              1
+            )}%; background: linear-gradient(90deg, ${
+    formScore > 85
+      ? "#00ccff, #00ff99"
+      : formScore > 70
+      ? "#ffaa00, #ffcc00"
+      : "#ff6b6b, #ff4d4d"
+  });"></div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Value</th>
+            <th>Explanation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>🏁 Reps</td>
+            <td>${reps}</td>
+            <td>You completed ${reps} full ${exercise.toLowerCase()} cycles (down → up transitions).</td>
+          </tr>
+          <tr>
+            <td>📐 Average Angle</td>
+            <td>${avgAngle.toFixed(1)}°</td>
+            <td>
+              ${
+                exercise.toLowerCase() === "squats"
+                  ? "Measured at the knee joint. 180° = upright, 100° = ideal deep squat. Lower = deeper squat."
+                  : "Measured at the elbow joint. 180° = arm extended, 45° = full curl. Lower = better contraction."
+              }
+            </td>
+          </tr>
+          <tr>
+            <td>📈 Improvement</td>
+            <td style="color:${improvementColor}; font-weight:600;">
+              ${improvementEmoji} ${improvement.toFixed(2)}%
+            </td>
+            <td>
+              ${
+                improvement > 0
+                  ? "You improved your range/form compared to your last session! Keep it up!"
+                  : improvement < 0
+                  ? "Slight decrease in range or form consistency. Try focusing on slower, controlled reps."
+                  : "Performance consistent with your previous session — steady and reliable!"
+              }
+            </td>
+          </tr>
+          <tr>
+            <td>💬 Feedback</td>
+            <td colspan="2" style="font-style: italic; color:#ccc;">"${feedback}"</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="popup-button-group">
+        <button id="closeExplain" class="button" style="background: #00ff99; color: #000;">Close</button>
+      </div>
+  `;
+
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+  popup.classList.add("explanation-popup"); // Add class for specific styling
+
+  // Fade-in animation
+  setTimeout(() => overlay.classList.add("visible"), 10);
+
+  // Close popup on click
+  const closePopup = () => {
+    overlay.classList.remove("visible");
+    setTimeout(() => overlay.remove(), 300); // Use consistent timing
+  };
+
+  popup.querySelector("#closeExplain").addEventListener("click", closePopup);
+  overlay.addEventListener("click", (e) => {
+    // Close if clicking on the dark background, not the popup content
+    if (e.target === overlay) {
+      closePopup();
+    }
+  });
+}

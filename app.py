@@ -645,27 +645,33 @@ def start_workout():
 
 def store_session_in_db(exercise_handler, user_id=1, exercise_name='squats'):
     """
-    Universal DB storage function for all exercises.
-    Handles Squats and Bicep Curls (and future ones).
+    Stores session data in MySQL and generates custom feedback based on
+    deviation from target/ideal angles in the 'exercise_targets' table.
+    Works for both Squats and Bicep Curls.
     """
     try:
         if exercise_handler is None:
             print("store_session_in_db: exercise_handler is None -> skipping.")
-            return
+            return {}
 
         summary = exercise_handler.get_session_summary()
         print(f"store_session_in_db summary for {exercise_name}:", summary)
 
-        # Get exercise_id dynamically from DB
-        cursor.execute(
-            "SELECT exercise_id FROM exercise_targets WHERE exercise_name=%s", (exercise_name,))
+        # ✅ 1. Fetch exercise details and targets
+        cursor.execute("""
+            SELECT exercise_id, ideal_angle, target_angle 
+            FROM exercise_targets WHERE exercise_name = %s
+        """, (exercise_name,))
         row = cursor.fetchone()
         if not row:
             print(f"⚠ No exercise_id found for {exercise_name}")
             return {}
-        exercise_id = row['exercise_id']
 
-        # Collect angle data if available (Squats / Curls)
+        exercise_id = row['exercise_id']
+        ideal_angle = row['ideal_angle']
+        target_angle = row['target_angle']
+
+        # ✅ 2. Gather recorded angles (knee or elbow)
         angle_key = 'knee_angle' if exercise_name == 'squats' else 'elbow_angle'
         angles = [r[angle_key] for r in getattr(
             exercise_handler, 'recording', []) if r.get(angle_key)]
@@ -674,29 +680,59 @@ def store_session_in_db(exercise_handler, user_id=1, exercise_name='squats'):
         duration_seconds = summary.get('session_time_sec', 0)
         total_reps = summary.get('total_reps', 0)
 
-        feedback = summary.get('feedback', 'Good session!')
-        improvement_percent = 0.0
-
-        # Get last average for improvement %
+        # ✅ 3. Fetch previous session for improvement comparison
         cursor.execute("""
             SELECT avg_angle FROM sessions 
             WHERE user_id=%s AND exercise_id=%s 
             ORDER BY date_time DESC LIMIT 1
         """, (user_id, exercise_id))
         last = cursor.fetchone()
-        if last and last['avg_angle']:
-            improvement_percent = (
-                (avg_angle - last['avg_angle']) / last['avg_angle']) * 100
+        last_avg = last['avg_angle'] if last and last['avg_angle'] else None
 
-        # Save session
+        improvement_percent = 0.0
+        if last_avg and avg_angle:
+            improvement_percent = ((avg_angle - last_avg) / last_avg) * 100
+
+        # ✅ 4. Generate Smart Feedback
+        feedback = "Good session!"
+        if avg_angle:
+            diff = avg_angle - target_angle
+            diff_percent = (diff / target_angle) * 100
+
+            # For squats (higher angle = shallower depth)
+            if exercise_name == 'squats':
+                if avg_angle > target_angle + 10:
+                    feedback = (f"Your average squat depth is {abs(diff_percent):.1f}% shallower "
+                                f"than ideal. Aim for around {target_angle:.1f}° at the bottom.")
+                elif avg_angle < target_angle - 10:
+                    feedback = (f"Excellent depth! You went {abs(diff_percent):.1f}% deeper "
+                                f"than target — great control!")
+                else:
+                    feedback = (f"Ideal: {target_angle:.1f}°, Your Avg: {avg_angle:.1f}° — "
+                                "Excellent form!")
+
+            # For curls (lower angle = better flexion)
+            elif exercise_name == 'bicep_curls':
+                if avg_angle > target_angle + 10:
+                    feedback = (f"Try curling higher! Ideal bottom angle: {target_angle:.1f}°, "
+                                f"Your Avg: {avg_angle:.1f}° ({abs(diff_percent):.1f}% above ideal).")
+                elif avg_angle < target_angle - 10:
+                    feedback = (
+                        f"Perfect contraction! You’re {abs(diff_percent):.1f}% beyond target range — keep it up!")
+                else:
+                    feedback = (f"Ideal: {target_angle:.1f}°, Your Avg: {avg_angle:.1f}° — "
+                                "Good range of motion!")
+
+        # ✅ 5. Save session summary to DB
         cursor.execute("""
-            INSERT INTO sessions (user_id, exercise_id, date_time, total_reps, avg_angle, improvement_percent, feedback, duration_seconds)
+            INSERT INTO sessions (user_id, exercise_id, date_time, total_reps, avg_angle, 
+                                  improvement_percent, feedback, duration_seconds)
             VALUES (%s, %s, NOW(), %s, %s, %s, %s, %s)
         """, (user_id, exercise_id, total_reps, avg_angle, improvement_percent, feedback, duration_seconds))
         db.commit()
         session_id = cursor.lastrowid
 
-        # Save rep data (generic)
+        # ✅ 6. Store per-rep data (angle history)
         rep_count = 0
         for i, r in enumerate(getattr(exercise_handler, 'recording', []), start=1):
             if r.get(angle_key):
@@ -707,25 +743,29 @@ def store_session_in_db(exercise_handler, user_id=1, exercise_name='squats'):
                 rep_count += 1
         db.commit()
 
-        print(
-            f"✅ Stored {exercise_name} session ID {session_id}: {total_reps} reps, avg {avg_angle}°")
+        print(f"✅ Stored {exercise_name} session ID {session_id}: "
+              f"{total_reps} reps, avg {avg_angle}°, feedback: {feedback}")
 
         return {
             "session_id": session_id,
             "avg_angle": avg_angle,
             "improvement_percent": improvement_percent,
             "feedback": feedback,
-            "total_reps": total_reps
+            "total_reps": total_reps,
+            "target_angle": target_angle
         }
 
     except Exception as e:
         print("❌ DB Error in store_session_in_db:", e)
+        db.rollback()
         return {}
 
 
 @app.route('/stop', methods=['POST'])
 def stop_exercise():
     global is_workout_active, workout_start_time, stats, current_exercise, exercise_handler
+    # Capture the exercise name before it's cleared
+    exercise_name_at_stop = current_exercise
     is_workout_active = False
     session_info = {}
 
@@ -737,7 +777,7 @@ def stop_exercise():
     if workout_start_time:
         duration = time.time() - workout_start_time
         total_reps = stats.get('total', 0)
-        exercise_name = current_exercise.replace(
+        exercise_name = exercise_name_at_stop.replace(
             '_', ' ').title() if current_exercise else "Unknown Exercise"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -746,9 +786,9 @@ def stop_exercise():
             f"Attempting to save session: exercise={exercise_name}, reps={total_reps}, duration={round(duration)}s")
 
         if exercise_handler:
-            print(f"Analyzing and saving {current_exercise} session...")
+            print(f"Analyzing and saving {exercise_name_at_stop} session...")
             session_info = store_session_in_db(
-                exercise_handler, user_id=1, exercise_name=current_exercise)
+                exercise_handler, user_id=1, exercise_name=exercise_name_at_stop)
         else:
             print("No valid exercise handler, skipping DB save.")
 
@@ -761,7 +801,7 @@ def stop_exercise():
                 if not file_exists:
                     writer.writerow(
                         ['timestamp', 'exercise', 'reps', 'duration_seconds'])
-                writer.writerow([timestamp, exercise_name,
+                writer.writerow([timestamp, exercise_name_at_stop.replace('_', ' ').title(),
                                 total_reps, round(duration)])
 
         workout_start_time = None  # Reset start time
@@ -786,6 +826,50 @@ def stop_exercise():
         current_exercise = None
 
         # Send summary to frontend
+        # ---- build a dynamic explanation for frontend ----
+        explanation_text = ""
+        try:
+            avg_angle = session_info.get("avg_angle")
+            target_angle = session_info.get("target_angle")
+            feedback_text = session_info.get(
+                "feedback", "") or summary_from_handler.get("feedback", "")
+            exercise_name = exercise_name_at_stop.replace('_', ' ').title()
+            key_name = exercise_name.lower()
+            if avg_angle is not None and target_angle is not None:
+                diff = avg_angle - target_angle
+                diff_percent = (diff / target_angle) * \
+                    100 if target_angle else 0
+                if "squat" in key_name:
+                    if diff_percent > 10:
+                        explanation_text = (f"Your average squat depth is {abs(diff_percent):.1f}% shallower than ideal. "
+                                            f"Aim for around {target_angle:.1f}° at the bottom.")
+                    elif diff_percent < -10:
+                        explanation_text = (
+                            f"Excellent depth! You went {abs(diff_percent):.1f}% deeper than target — great control!")
+                    else:
+                        explanation_text = (
+                            f"Ideal: {target_angle:.1f}°, Your Avg: {avg_angle:.1f}° — Excellent form!")
+                elif "bicep" in key_name or "curl" in key_name:
+                    if diff_percent > 10:
+                        explanation_text = (f"Try curling higher! Ideal bottom angle: {target_angle:.1f}°, "
+                                            f"Your Avg: {avg_angle:.1f}° ({abs(diff_percent):.1f}% above ideal).")
+                    elif diff_percent < -10:
+                        explanation_text = (
+                            f"Perfect contraction! You’re {abs(diff_percent):.1f}% beyond target range — keep it up!")
+                    else:
+                        explanation_text = (
+                            f"Ideal: {target_angle:.1f}°, Your Avg: {avg_angle:.1f}° — Good range of motion!")
+                else:
+                    # generic fallback
+                    explanation_text = feedback_text or "Good session!"
+            else:
+                explanation_text = feedback_text or "Good session!"
+        except Exception as e:
+            print("⚠️ Error building explanation_text:", e)
+            explanation_text = summary_from_handler.get(
+                "feedback", session_info.get("feedback", "Good session!"))
+
+        # Send summary to frontend (include explanation)
         return jsonify({
             "status": "stopped",
             "message": "Session saved successfully!",
@@ -794,13 +878,34 @@ def stop_exercise():
                 "total_reps": summary_from_handler.get("total_reps", 0),
                 "avg_angle": session_info.get("avg_angle", 0),
                 "improvement_percent": session_info.get("improvement_percent", 0),
-                "feedback": summary_from_handler.get("feedback", session_info.get("feedback", "Well done!"))
+                "feedback": summary_from_handler.get("feedback", session_info.get("feedback", "Well done!")),
+                "explanation": explanation_text
             }
         })
+
     else:
-        print("exercise_handler is None, cannot generate summary.")
-        # Reset handler reference just in case
-        return jsonify({"status": "no_active_exercise"})
+        print("exercise_handler is None, returning fallback summary.")
+
+    # Even if handler is None, provide a default/fallback summary for the popup
+    fallback_summary = {
+        "exercise": current_exercise.replace('_', ' ').title() if current_exercise else "Unknown",
+        "total_reps": stats.get("total", 0),
+        "avg_angle": 0,
+        "improvement_percent": 0,
+        "feedback": "Workout stopped successfully.",
+        "explanation": "Session ended early or no data recorded. Try again to capture full analysis."
+    }
+
+    # Clean reset to ensure fresh session next time
+    exercise_handler = None
+    current_exercise = None
+    is_workout_active = False
+
+    return jsonify({
+        "status": "stopped",
+        "message": "Workout stopped (fallback summary).",
+        "summary": fallback_summary
+    })
 
 
 @app.route('/set_target_reps', methods=['POST'])
