@@ -432,6 +432,36 @@ progress::-moz-progress-bar {
   text-align: left;
 }
 
+.issue-counts-container {
+  margin: 20px 0;
+  padding: 15px;
+  background: rgba(255, 204, 0, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #ffcc00;
+}
+
+.issue-counts-container h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #ffcc00;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.issue-counts-container ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.issue-counts-container li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  text-transform: capitalize;
+}
+
 .explanation-popup .accuracy-bar-container {
   margin-bottom: 20px;
   text-align: center;

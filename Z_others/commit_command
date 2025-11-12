@@ -36,5 +36,7 @@ BICEP CURLS ->(shoulder, elbow, wrist)
 | **Up** (arm curled fully) | ~40° - 60°        | Top of rep        |
 
 
+If you only had 1 rep and it had 5–6 errors (back_bent, knee_over_toe, shallow, etc.),
+→ form_accuracy ≈ 1 - (5/6) = 0.16 → 16%, not 0.2%.
 
 '''

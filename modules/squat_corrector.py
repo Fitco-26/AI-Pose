@@ -130,6 +130,7 @@ class SquatCorrector:
         # For live error logging, similar to CurlCounter
         self.new_error_logged = False
         self.last_error_message = None
+        self.last_error = (None, None)
 
     # ---------------- Internal helpers ----------------
 
@@ -340,6 +341,8 @@ class SquatCorrector:
                         # This will be picked up by app.py
                         self.last_error_message = ", ".join(error_messages)
                         self.new_error_logged = True
+                        # Also expose a tuple for app.py compatibility (same as CurlCounter)
+                        self.last_error = ('squat', self.last_error_message)
 
                 # Count rep only if no critical safety issues and depth achieved
                 # Rep is counted if depth is achieved, feedback is given separately.
@@ -452,46 +455,71 @@ class SquatCorrector:
     # ---------------- Session summary and analysis ----------------
 
     def get_session_summary(self):
-        """
-        Returns a dict summary suitable for driving a 'States' screen UI.
-        Does not run heavy ML — just deterministic metrics from recorded data.
-        """
+        """Generate realistic summary for squat sessions using rep-based accuracy."""
         total_time = time.time() - self.start_time if self.start_time else 0
         total_reps = self.rep_counter
-        # form accuracy: simple heuristic = 1 - (avg number of unique errors per rep / possible_error_count)
-        possible_errors = 6.0
-        avg_errors_per_rep = np.mean(
-            [len(s) for s in self.rep_issues]) if self.rep_issues else 0.0
-        form_accuracy = max(0.0, 1.0 - (avg_errors_per_rep / possible_errors))
 
-        # smoothness: mean jerk across recorded frames
-        all_knees = [r['knee_angle']
-                     for r in self.recording if r.get('knee_angle') is not None]
+        # Handle fallback for motion without full rep
+        if total_reps == 0 and len(self.recording) > 30:
+            total_reps = 1
+
+        # --- Compute form accuracy ---
+        # ✅ FIX: Use the reliable self.rep_issues list directly.
+        # Calculate accuracy based on total errors vs. total reps, which is more granular.
+        # A rep can have multiple errors. We penalize based on the total error count.
+        total_errors = sum(len(s) for s in self.rep_issues)
+        # Create a score where each error slightly reduces the total accuracy.
+        # The penalty per error is scaled by the number of reps.
+        # This prevents a single bad rep from destroying the score in a long set.
+        # 5.0 is a tunable factor
+        accuracy_score = 1.0 - (total_errors / (max(1, total_reps) * 5.0))
+        # Clamp score between 0 and 1 and convert to percentage
+        form_accuracy = round(max(0.0, min(1.0, accuracy_score)) * 100, 1)
+
+        # --- Smoothness metric ---
+        all_knees = [r["knee_angle"]
+                     for r in self.recording if r.get("knee_angle") is not None]
         smoothness_score = 1.0
         if len(all_knees) >= 6:
             vals = np.array(all_knees)
-            d1 = np.diff(vals)
-            d2 = np.diff(d1)
-            jerk = np.mean(np.abs(d2)) if len(d2) > 0 else 0.0
-            # map jerk to 0..1 inversely (heuristic)
-            smoothness_score = float(max(0.0, 1.0 - min(1.0, jerk / 50.0)))
+            jerk = np.mean(np.abs(np.diff(np.diff(vals)))
+                           ) if len(vals) > 3 else 0
+            smoothness_score = round(
+                max(0.0, 1.0 - min(1.0, jerk / 50.0)), 3)
 
-        # aggregate issue counts
+        # --- Compute depth feedback ---
+        avg_angle = np.mean(all_knees) if len(all_knees) else 0
+        if np.isnan(avg_angle):
+            avg_angle = 0.0
+        ideal_angle = 100.0
+        depth_pct = ((avg_angle - ideal_angle) / ideal_angle) * 100
+        feedback_text = (
+            f"Your average squat depth is {depth_pct:.1f}% shallower than ideal. "
+            f"Aim for around {ideal_angle:.1f}° at the bottom."
+            if avg_angle > ideal_angle + 5
+            else "Excellent depth and form!"
+        )
+
+        # --- Issue count summary ---
         issue_counts = {}
         for s in self.rep_issues:
             for tag in s:
                 issue_counts[tag] = issue_counts.get(tag, 0) + 1
 
+        # --- Final summary dict ---
         summary = {
-            'exercise': self.exercise_name,
-            'total_reps': total_reps,
-            'session_time_sec': int(total_time),
-            'form_accuracy': round(form_accuracy, 3),
-            'smoothness_score': round(smoothness_score, 3),
-            'issue_counts': issue_counts,
-            'rep_issues': [list(s) for s in self.rep_issues],
-            'frames_recorded': len(self.recording)
+            "exercise": self.exercise_name,
+            "total_reps": int(total_reps),
+            "session_time_sec": int(total_time),
+            "form_accuracy": form_accuracy,
+            "smoothness_score": smoothness_score,
+            "frames_recorded": len(self.recording),
+            "rep_issues": self.rep_issues,  # Use the correct list
+            "issue_counts": issue_counts,
+            "feedback": feedback_text,
+            "avg_angle": round(avg_angle, 1),
         }
+
         return summary
 
     def analyze_session(self, out_csv_path=None):

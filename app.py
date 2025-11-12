@@ -96,6 +96,22 @@ def speak_async(text):
         speech_queue.put(text)
 
 
+def calculate_bounded_improvement(current, previous):
+    """
+    Computes a smooth, bounded improvement percentage between sessions,
+    clamped between -20% and +20% for a more user-friendly display.
+    This avoids extreme percentages when the previous score was very low.
+    """
+    if previous is None or previous <= 0:
+        return 0.0
+
+    # The change is the difference between the two accuracy scores (0-100).
+    delta = current - previous
+    # Normalize the change to a -20% to +20% range for display.
+    improvement = max(-20.0, min(20.0, (delta / 100.0) * 20.0))
+    return round(improvement, 2)
+
+
 # --- Camera Management ---
 _camera_instance = None
 _camera_lock = threading.Lock()
@@ -220,6 +236,9 @@ def are_landmarks_visible(landmarks, visibility_threshold=0.5):
 def generate_frames():
     global stats, is_workout_active, last_spoken_feedback, last_spoken_time, last_spoken_rep, exercise_handler, current_exercise, _camera_active
 
+    # ensure form_warning exists each loop iteration
+    form_warning = ""
+
     while True:
         if not _camera_active:
             print("🛑 Stopping frame generation — camera released.")
@@ -293,11 +312,15 @@ def generate_frames():
                             form_warning = " | ".join(sorted(feedbacks))
 
                         if exercise_handler.new_error_logged:
-                            error_side, error_msg = exercise_handler.last_error
-                            rep_at_error = (stats[error_side] + 1)
-                            stats["error_log"].append(
-                                f"At Rep {rep_at_error} ({error_side.capitalize()}): {error_msg}")
-                            exercise_handler.new_error_logged = False
+                            # Unified error handling for both Curl and Squat
+                            if hasattr(exercise_handler, 'last_error'):
+                                error_side, error_msg = exercise_handler.last_error
+                                rep_at_error = stats.get(
+                                    error_side, stats.get('total', 0)) + 1
+                                side_text = f" ({error_side.capitalize()})" if error_side != 'squat' else ""
+                                stats["error_log"].append(
+                                    f"At Rep {rep_at_error}{side_text}: {error_msg}")
+                                exercise_handler.new_error_logged = False
 
                         current_rep_count = max(left, right)
                         if current_rep_count > last_spoken_rep:
@@ -367,11 +390,12 @@ def generate_frames():
 
                     # Handle logged errors for squats
                     if exercise_handler.new_error_logged:
-                        error_msg = exercise_handler.last_error_message
-                        rep_at_error = total + 1  # Error is for the upcoming rep
-                        stats["error_log"].append(
-                            f"At Rep {rep_at_error}: {error_msg}")
-                        exercise_handler.new_error_logged = False
+                        if hasattr(exercise_handler, 'last_error'):
+                            error_side, error_msg = exercise_handler.last_error
+                            rep_at_error = total + 1  # Error is for the upcoming rep
+                            stats["error_log"].append(
+                                f"At Rep {rep_at_error}: {error_msg}")
+                            exercise_handler.new_error_logged = False
 
                 # --- Common Logic (Completion, Voice Feedback) ---
                 if stats.get("total", 0) >= TARGET_REPS and is_workout_active:
@@ -616,7 +640,7 @@ def get_stats():
 
 @app.route('/start', methods=['POST'])
 def start_workout():
-    global is_workout_active, stats, last_spoken_feedback, last_spoken_time, last_spoken_rep, workout_start_time, current_exercise, exercise_handler
+    global is_workout_active, stats, last_spoken_feedback, last_spoken_time, last_spoken_rep, workout_start_time, current_exercise, exercise_handler, TARGET_REPS
     workout_start_time = time.time()
     is_workout_active = True
     # Reset counters & stats at workout start
@@ -640,6 +664,8 @@ def start_workout():
         exercise_handler = None  # No handler for this exercise yet
 
     speak_async(f"Let's go for {TARGET_REPS} reps. Starting now.")
+    print(
+        f"✅ Workout started for {current_exercise}, handler: {type(exercise_handler).__name__}")
     return jsonify({"status": "Workout started"})
 
 
@@ -658,8 +684,11 @@ def store_session_in_db(exercise_handler, user_id=1, exercise_name='squats'):
         print(f"store_session_in_db summary for {exercise_name}:", summary)
 
         # ✅ 1. Fetch exercise details and targets
+        form_accuracy = summary.get("form_accuracy", 0)
+        num_errors = len(summary.get("rep_issues", []))
+
         cursor.execute("""
-            SELECT exercise_id, ideal_angle, target_angle 
+            SELECT exercise_id, ideal_angle, target_angle
             FROM exercise_targets WHERE exercise_name = %s
         """, (exercise_name,))
         row = cursor.fetchone()
@@ -674,26 +703,37 @@ def store_session_in_db(exercise_handler, user_id=1, exercise_name='squats'):
         # ✅ 2. Gather recorded angles (knee or elbow)
         angle_key = 'knee_angle' if exercise_name == 'squats' else 'elbow_angle'
         angles = [r[angle_key] for r in getattr(
-            exercise_handler, 'recording', []) if r.get(angle_key)]
+            exercise_handler, 'recording', []) if r.get(angle_key) is not None]
         avg_angle = float(np.mean(angles)) if angles else None
 
         duration_seconds = summary.get('session_time_sec', 0)
         total_reps = summary.get('total_reps', 0)
 
-        # ✅ 3. Fetch previous session for improvement comparison
+        # ✅ 3. Fetch previous valid session BEFORE inserting the new one
         cursor.execute("""
-            SELECT avg_angle FROM sessions 
+            SELECT form_accuracy FROM sessions
             WHERE user_id=%s AND exercise_id=%s 
+              AND form_accuracy IS NOT NULL
             ORDER BY date_time DESC LIMIT 1
         """, (user_id, exercise_id))
         last = cursor.fetchone()
-        last_avg = last['avg_angle'] if last and last['avg_angle'] else None
 
-        improvement_percent = 0.0
-        if last_avg and avg_angle:
-            improvement_percent = ((avg_angle - last_avg) / last_avg) * 100
+        if last:
+            last_accuracy = last['form_accuracy']
+            print(
+                f"📋 Compared with previous session: form_accuracy={last_accuracy}")
+        else:
+            last_accuracy = None
+            print("ℹ️ No previous valid session found — treating this as baseline.")
 
-        # ✅ 4. Generate Smart Feedback
+        # ✅ 4. Compute improvement percent BEFORE saving
+        improvement_percent = calculate_bounded_improvement(
+            form_accuracy, last_accuracy)
+        print(
+            f"📊 Improvement Debug: current={form_accuracy}, previous={last_accuracy}, final={improvement_percent}"
+        )
+
+        # ✅ 5. Generate Smart Feedback
         feedback = "Good session!"
         if avg_angle:
             diff = avg_angle - target_angle
@@ -723,16 +763,17 @@ def store_session_in_db(exercise_handler, user_id=1, exercise_name='squats'):
                     feedback = (f"Ideal: {target_angle:.1f}°, Your Avg: {avg_angle:.1f}° — "
                                 "Good range of motion!")
 
-        # ✅ 5. Save session summary to DB
+        # ✅ 6. Save session summary to DB
         cursor.execute("""
-            INSERT INTO sessions (user_id, exercise_id, date_time, total_reps, avg_angle, 
-                                  improvement_percent, feedback, duration_seconds)
-            VALUES (%s, %s, NOW(), %s, %s, %s, %s, %s)
-        """, (user_id, exercise_id, total_reps, avg_angle, improvement_percent, feedback, duration_seconds))
+            INSERT INTO sessions (user_id, exercise_id, date_time, total_reps, avg_angle,
+                                  improvement_percent, feedback, duration_seconds, form_accuracy)
+            VALUES (%s, %s, NOW(), %s, %s, %s, %s, %s, %s)
+        """, (user_id, exercise_id, total_reps, avg_angle,
+              improvement_percent, feedback, duration_seconds, form_accuracy))
         db.commit()
         session_id = cursor.lastrowid
 
-        # ✅ 6. Store per-rep data (angle history)
+        # ✅ 7. Store per-rep data (angle history)
         rep_count = 0
         for i, r in enumerate(getattr(exercise_handler, 'recording', []), start=1):
             if r.get(angle_key):
@@ -752,7 +793,9 @@ def store_session_in_db(exercise_handler, user_id=1, exercise_name='squats'):
             "improvement_percent": improvement_percent,
             "feedback": feedback,
             "total_reps": total_reps,
-            "target_angle": target_angle
+            "target_angle": target_angle,
+            "accuracy": round(form_accuracy, 1),
+            "num_errors": num_errors
         }
 
     except Exception as e:
@@ -767,6 +810,15 @@ def stop_exercise():
     # Capture the exercise name before it's cleared
     exercise_name_at_stop = current_exercise
     is_workout_active = False
+
+    # 🔄 Safety auto-recover handler if lost before stop
+    if exercise_handler is None and exercise_name_at_stop:
+        print("⚠️ Handler missing, attempting recovery...")
+        if exercise_name_at_stop == 'bicep_curls':
+            exercise_handler = CurlCounter()
+        elif exercise_name_at_stop == 'squats':
+            exercise_handler = SquatCorrector(speak_feedback=False)
+
     session_info = {}
 
     # Debug: show current state
@@ -813,7 +865,22 @@ def stop_exercise():
         try:
             # This assumes your handler has a method like get_session_summary()
             summary_from_handler = exercise_handler.get_session_summary()
-            print("store_session_in_db: summary:", summary_from_handler)
+            # 🧮 Ensure form accuracy is captured for SquatCorrector
+            if "form_accuracy" not in summary_from_handler:
+                if hasattr(exercise_handler, "get_session_summary"):
+                    try:
+                        # Re-call to ensure all metrics are present
+                        summary_from_handler = exercise_handler.get_session_summary()
+                    except Exception as e:
+                        print(f"⚠️ Could not re-compute form_accuracy: {e}")
+                        summary_from_handler["form_accuracy"] = 0.0
+
+            # ✅ Fallback to prevent all-zero summaries if motion was detected
+            if summary_from_handler.get("total_reps", 0) == 0:
+                if len(getattr(exercise_handler, "recording", [])) > 30:
+                    summary_from_handler["total_reps"] = 1
+                    summary_from_handler["form_accuracy"] = 50.0
+            print("stop_exercise: summary:", summary_from_handler)
         except Exception as e:
             print(f"⚠️ Error getting session summary from handler: {e}")
             # summary_from_handler remains {}
@@ -869,17 +936,28 @@ def stop_exercise():
             explanation_text = summary_from_handler.get(
                 "feedback", session_info.get("feedback", "Good session!"))
 
-        # Send summary to frontend (include explanation)
+        # Merge handler summary with DB-saved info for the most complete picture
+        merged_accuracy = summary_from_handler.get("form_accuracy", None)
+        if (not merged_accuracy or merged_accuracy == 0.0) and "accuracy" in session_info:
+            merged_accuracy = session_info["accuracy"]
+
         return jsonify({
             "status": "stopped",
             "message": "Session saved successfully!",
             "summary": {
-                "exercise": summary_from_handler.get("exercise", "unknown"),
-                "total_reps": summary_from_handler.get("total_reps", 0),
-                "avg_angle": session_info.get("avg_angle", 0),
-                "improvement_percent": session_info.get("improvement_percent", 0),
-                "feedback": summary_from_handler.get("feedback", session_info.get("feedback", "Well done!")),
-                "explanation": explanation_text
+                "exercise": summary_from_handler.get("exercise", exercise_name_at_stop),
+                "total_reps": summary_from_handler.get("total_reps", session_info.get("total_reps", 0)),
+                "avg_angle": session_info.get("avg_angle", summary_from_handler.get("avg_angle", 0)),
+                # ✅ FIX: improvement should only come from DB summary (session_info)
+                "improvement_percent": session_info.get("improvement_percent", 0.0),
+                "feedback": session_info.get("feedback", summary_from_handler.get("feedback", "Good session!")),
+                "explanation": explanation_text,
+                "form_accuracy": round(
+                    summary_from_handler.get(
+                        "form_accuracy", session_info.get("accuracy", 0.0)), 1
+                ),
+                "smoothness_score": summary_from_handler.get("smoothness_score"),
+                "issue_counts": summary_from_handler.get("issue_counts", {})
             }
         })
 
@@ -893,7 +971,10 @@ def stop_exercise():
         "avg_angle": 0,
         "improvement_percent": 0,
         "feedback": "Workout stopped successfully.",
-        "explanation": "Session ended early or no data recorded. Try again to capture full analysis."
+        "explanation": "Session ended early or no data recorded. Try again to capture full analysis.",
+        "form_accuracy": 0.0,
+        "smoothness_score": None,
+        "issue_counts": {}
     }
 
     # Clean reset to ensure fresh session next time

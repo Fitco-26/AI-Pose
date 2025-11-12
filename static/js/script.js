@@ -121,7 +121,10 @@ async function stopWorkout() {
         s.avg_angle || 0,
         s.improvement_percent || 0,
         s.feedback || "Good session!",
-        s.explanation || "You did great — keep up the effort!"
+        s.explanation || "You did great — keep up the effort!",
+        s.form_accuracy,
+        s.smoothness_score, // Pass new data
+        s.issue_counts // Pass new data
       );
     } else {
       // 🟢 Fallback popup if no proper summary was returned
@@ -146,7 +149,10 @@ function showSessionPopup(
   avgAngle,
   improvement,
   feedback,
-  explanation
+  explanation,
+  formAccuracy, // Added to receive the accurate value from the backend
+  smoothnessScore,
+  issueCounts
 ) {
   // --- Form Accuracy Calculation ---
   const targetAngle = exercise.toLowerCase() === "squats" ? 100 : 45; // ideal targets
@@ -159,6 +165,9 @@ function showSessionPopup(
   formScore += improvement * 0.2; // small influence of improvement%
   formScore = Math.max(0, Math.min(100, formScore));
 
+  // ✅ Use the accurate value from the backend directly
+  const finalFormScore = formAccuracy !== undefined ? formAccuracy : formScore;
+
   // --- Create popup container ---
   const overlay = document.createElement("div");
   overlay.className = "popup-overlay";
@@ -169,7 +178,7 @@ function showSessionPopup(
           <p>Average Angle: <b>${avgAngle.toFixed(1)}°</b></p>
           <p>Improvement: <b>${improvement.toFixed(2)}%</b></p>
           <p>🎯 Form Accuracy: 
-            <b style="color:${formColor};">${formScore.toFixed(1)}%</b>
+            <b style="color:${formColor};">${finalFormScore.toFixed(1)}%</b>
           </p>
           <p class="feedback-text">"${feedback}"</p>
 
@@ -200,7 +209,10 @@ function showSessionPopup(
       avgAngle,
       improvement,
       feedback,
-      explanation
+      explanation,
+      finalFormScore, // Pass the corrected score
+      smoothnessScore,
+      issueCounts
     );
   });
   overlay.addEventListener("click", (e) => {
@@ -304,7 +316,10 @@ function showExplanationPopup(
   avgAngle,
   improvement,
   feedback,
-  explanation
+  explanation,
+  formAccuracy, // Receive the accurate score
+  smoothnessScore,
+  issueCounts
 ) {
   const improvementColor =
     improvement > 0 ? "#00ff99" : improvement < 0 ? "#ff6b6b" : "#ffaa00";
@@ -312,13 +327,7 @@ function showExplanationPopup(
     improvement > 0 ? "✅" : improvement < 0 ? "⚠️" : "➖";
   const fadeDuration = 300;
 
-  // --- Form Score Logic ---
-  const targetAngle = exercise.toLowerCase() === "squats" ? 100 : 45; // ideal targets
-  let deviation = Math.abs(avgAngle - targetAngle);
-  let formScore = Math.max(0, 100 - (deviation / targetAngle) * 100);
-  formScore = Math.min(formScore, 100);
-  formScore += improvement * 0.2; // small influence of improvement%
-  formScore = Math.max(0, Math.min(100, formScore));
+  const finalFormScore = formAccuracy; // Use the value passed from the first popup
 
   const overlay = document.createElement("div");
   overlay.className = "popup-overlay";
@@ -333,19 +342,40 @@ function showExplanationPopup(
 
       <!-- Form Accuracy Bar -->
       <div class="accuracy-bar-container">
-        <p>🎯 Form Accuracy: ${formScore.toFixed(1)}%</p>
+        <p>🎯 Form Accuracy: ${finalFormScore.toFixed(1)}%</p>
         <div class="accuracy-progress-bg">
-            <div class="accuracy-progress-fill" style="width: ${formScore.toFixed(
+            <div class="accuracy-progress-fill" style="width: ${finalFormScore.toFixed(
               1
             )}%; background: linear-gradient(90deg, ${
-    formScore > 85
+    finalFormScore > 85
       ? "#00ccff, #00ff99"
-      : formScore > 70
+      : finalFormScore > 70
       ? "#ffaa00, #ffcc00"
       : "#ff6b6b, #ff4d4d"
   });"></div>
         </div>
       </div>
+
+      <!-- Issue Counts Section (only if issues exist) -->
+      ${
+        issueCounts && Object.keys(issueCounts).length > 0
+          ? `
+        <div class="issue-counts-container">
+          <h4>Common Issues This Session:</h4>
+          <ul>
+            ${Object.entries(issueCounts)
+              .map(
+                ([issue, count]) =>
+                  `<li><span>${issue.replace(
+                    /_/g,
+                    " "
+                  )}:</span> <strong>${count} reps</strong></li>`
+              )
+              .join("")}
+          </ul>
+        </div>`
+          : ""
+      }
 
       <table>
         <thead>
@@ -366,8 +396,9 @@ function showExplanationPopup(
             <td>${avgAngle.toFixed(1)}°</td>
             <td>
               ${
-                exercise.toLowerCase() === "squats"
-                  ? "Measured at the knee joint. 180° = upright, 100° = ideal deep squat. Lower = deeper squat."
+                // ✅ Dynamic explanation based on exercise
+                exercise.toLowerCase().includes("squat")
+                  ? "Measured at the knee joint. 180° = standing, 90° = full squat. Lower = deeper depth."
                   : "Measured at the elbow joint. 180° = arm extended, 45° = full curl. Lower = better contraction."
               }
             </td>
@@ -378,15 +409,35 @@ function showExplanationPopup(
               ${improvementEmoji} ${improvement.toFixed(2)}%
             </td>
             <td>
-              ${
-                improvement > 0
-                  ? "You improved your range/form compared to your last session! Keep it up!"
-                  : improvement < 0
-                  ? "Slight decrease in range or form consistency. Try focusing on slower, controlled reps."
-                  : "Performance consistent with your previous session — steady and reliable!"
+            ${(() => {
+              if (improvement === 0) {
+                return "Baseline session — establishing your starting form!";
+              } else if (improvement > 0) {
+                return `You improved by +${improvement.toFixed(
+                  2
+                )}%! Great progress!`;
+              } else {
+                return `Slight dip of ${Math.abs(improvement).toFixed(
+                  2
+                )}% — focus on control!`;
               }
+            })()}
+          </td>
+          </tr>
+          ${
+            // Conditionally add the Smoothness row only if the value is present
+            smoothnessScore !== null && smoothnessScore !== undefined
+              ? `
+          <tr>
+            <td>🏃‍♂️ Smoothness</td>
+            <td>${(smoothnessScore * 100).toFixed(1)}%</td>
+            <td>
+              A measure of how controlled your movements were. Higher is better, indicating less jerky motion.
             </td>
           </tr>
+          `
+              : ""
+          }
           <tr>
             <td>💬 Feedback</td>
             <td colspan="2" style="font-style: italic; color:#ccc;">"${feedback}"</td>

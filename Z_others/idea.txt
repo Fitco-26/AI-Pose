@@ -24,3 +24,5 @@ Can we add a feature to save the workout summary (total reps, duration) to a fil
 Use the past data to train a model to help the model understand it's user better today
 
 add toggle for mediapipe pose detection on and off on the states screen 
+
+How can we add a user profile system to save settings and history for different people?
