@@ -485,7 +485,7 @@ class SquatCorrector:
             jerk = np.mean(np.abs(np.diff(np.diff(vals)))
                            ) if len(vals) > 3 else 0
             smoothness_score = round(
-                max(0.0, 1.0 - min(1.0, jerk / 50.0)), 3)
+                max(0.0, 1.0 - min(1.0, jerk / 75.0)), 3)
 
         # --- Compute depth feedback ---
         avg_angle = np.mean(all_knees) if len(all_knees) else 0

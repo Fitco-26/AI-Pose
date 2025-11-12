@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - FitCo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/new_dashboard_style.css') }}"
+    />
+    <style>
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      .auth-card {
+        width: 100%;
+        max-width: 450px;
+      }
+      .auth-form {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .form-group input {
+        width: 100%;
+        padding: 12px;
+        background-color: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 1rem;
+      }
+      .auth-button {
+        background: linear-gradient(
+          90deg,
+          var(--accent-blue),
+          var(--accent-lime)
+        );
+        color: #000;
+        box-shadow: 0 4px 15px var(--shadow-color-lime);
+        border: none;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card auth-card">
+      <h2 class="page-title" style="text-align: center; margin-bottom: 20px">
+        Login to FitCo
+      </h2>
+      {% with messages = get_flashed_messages(with_categories=true) %} {% if
+      messages %} {% for category, message in messages %}
+      <div class="alert-{{ category }}">{{ message }}</div>
+      {% endfor %} {% endif %} {% endwith %}
+      <form action="/login" method="POST" class="auth-form">
+        <div class="form-group">
+          <input type="text" name="username" placeholder="Username" required />
+        </div>
+        <div class="form-group">
+          <input
+            type="password"
+            name="password"
+            placeholder="Password"
+            required
+          />
+        </div>
+        <button type="submit" class="auth-button">Login</button>
+        <p style="text-align: center; color: var(--text-secondary)">
+          Don't have an account?
+          <a href="{{ url_for('register') }}">Register here</a>
+        </p>
+      </form>
+    </div>
+  </body>
+</html>

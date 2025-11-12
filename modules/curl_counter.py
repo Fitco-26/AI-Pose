@@ -300,9 +300,9 @@ class CurlCounter:
             jerk = np.mean(np.abs(np.diff(np.diff(vals)))
                            ) if len(vals) > 3 else 0
             # Normalize jerk into a 0-1 score. Higher jerk = lower score.
-            # ✅ FIX: Further increased divisor to make smoothness less sensitive for curl motions.
+            # ✅ FIX: Significantly increased divisor to make smoothness less sensitive for curl motions.
             smoothness_score = round(
-                max(0.0, 1.0 - min(1.0, jerk / 150.0)), 3)
+                max(0.0, 1.0 - min(1.0, jerk / 250.0)), 3)
 
         # --- Issue count summary ---
         issue_counts = {}

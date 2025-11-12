@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Profile</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/feather-icons"></script>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/new_dashboard_style.css') }}"
+    />
+    <style>
+      .profile-form-container {
+        display: flex;
+        gap: 30px;
+        align-items: flex-start;
+      }
+      .profile-picture-section {
+        flex-basis: 200px;
+        text-align: center;
+      }
+      .profile-avatar {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 4px solid var(--accent-lime);
+        margin-bottom: 15px;
+      }
+      .profile-details-section {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .form-group label {
+        font-weight: 500;
+        color: var(--text-secondary);
+      }
+      .form-group input,
+      .form-group select {
+        padding: 12px;
+        background-color: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 1rem;
+      }
+      .save-button {
+        align-self: flex-start;
+        margin-top: 20px;
+        background: linear-gradient(
+          90deg,
+          var(--accent-blue),
+          var(--accent-lime)
+        );
+        color: #000;
+        box-shadow: 0 4px 15px var(--shadow-color-lime);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dashboard-wrapper">
+      <!-- Sidebar -->
+      <nav class="sidebar">
+        <div class="sidebar-header">
+          <i data-feather="activity"></i>
+          <span>FitCo</span>
+        </div>
+        <ul class="sidebar-links">
+          <li><a href="{{ url_for('new_dashboard') }}"><i data-feather="grid"></i><span>Dashboard</span></a></li>
+          <li><a href="{{ url_for('select_exercise') }}"><i data-feather="video"></i><span>Workouts</span></a></li>
+          <li><a href="{{ url_for('history') }}"><i data-feather="clock"></i><span>History</span></a></li>
+          <li><a href="{{ url_for('settings') }}"><i data-feather="settings"></i><span>Settings</span></a></li>
+        </ul>
+        <ul class="sidebar-footer">
+          <li class="active">
+            <a href="{{ url_for('profile') }}"><i data-feather="user"></i><span>Profile</span></a>
+          </li>
+          <li>
+            <a href="{{ url_for('logout') }}"><i data-feather="log-out"></i><span>Logout</span></a>
+          </li>
+        </ul>
+      </nav>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <h3 class="page-title">My Profile</h3>
+
+        <div class="card full-page-card">
+          <form method="POST" enctype="multipart/form-data" class="profile-form-container">
+            <!-- Profile Picture Section -->
+            <div class="profile-picture-section">
+              <img src="{{ url_for('static', filename=user.profile_image.replace('static/', '')) if user.profile_image else url_for('static', filename='uploads/default.png') }}" alt="Profile Avatar" class="profile-avatar" />
+              <label for="profile_image" class="button" style="cursor: pointer; padding: 8px 12px; font-size: 0.9rem;">Change Picture</label>
+              <input type="file" id="profile_image" name="profile_image" style="display: none;" />
+            </div>
+
+            <!-- Profile Details Section -->
+            <div class="profile-details-section">
+              {% if bmi %}
+              <div class="form-group">
+                  <label>Body Mass Index (BMI)</label>
+                  <div style="display: flex; align-items: baseline; gap: 15px; background-color: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px;">
+                      <strong style="font-size: 2.5rem; color: {{ bmi_color }};">{{ bmi }}</strong>
+                      <span style="font-size: 1.2rem; font-weight: 600; color: {{ bmi_color }};">{{ bmi_category }}</span>
+                  </div>
+                  <small style="color: var(--text-secondary); margin-top: 5px;">
+                      This is an estimate based on your height and weight.
+                      <br>Underweight: &lt;18.5, Normal: 18.5-24.9, Overweight: 25-29.9, Obesity: 30+
+                  </small>
+              </div>
+              {% else %}
+              <div class="form-group">
+                  <label>Body Mass Index (BMI)</label>
+                  <div style="background-color: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; color: var(--text-secondary);">
+                      Please enter your height and weight to calculate your BMI.
+                  </div>
+              </div>
+              {% endif %}
+              <div class="form-group">
+                <label for="nickname">Nickname</label>
+                <input type="text" id="nickname" name="nickname" value="{{ user.nickname or '' }}" />
+              </div>
+              <div class="form-group">
+                <label for="age">Age</label>
+                <input type="number" id="age" name="age" value="{{ user.age or '' }}" />
+              </div>
+              <div class="form-group">
+                <label for="height">Height (cm)</label>
+                <input type="number" step="0.1" id="height" name="height" value="{{ user.height or '' }}" />
+              </div>
+              <div class="form-group">
+                <label for="weight">Weight (kg)</label>
+                <input type="number" step="0.1" id="weight" name="weight" value="{{ user.weight or '' }}" />
+              </div>
+              <div class="form-group">
+                <label for="level">Fitness Level</label>
+                <select id="level" name="level">
+                  <option {% if user.level == 'Beginner' %}selected{% endif %}>Beginner</option>
+                  <option {% if user.level == 'Intermediate' %}selected{% endif %}>Intermediate</option>
+                  <option {% if user.level == 'Advanced' %}selected{% endif %}>Advanced</option>
+                </select>
+              </div>
+              <button type="submit" class="button save-button">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      feather.replace();
+      const savedTheme = localStorage.getItem("theme") || "dark";
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    </script>
+  </body>
+</html>

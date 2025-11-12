@@ -50,10 +50,18 @@
             >
           </li>
         </ul>
-        <div class="sidebar-footer">
-          <a href="#"><i data-feather="user"></i><span>Profile</span></a>
-          <a href="#"><i data-feather="log-out"></i><span>Logout</span></a>
-        </div>
+        <ul class="sidebar-footer">
+          <li>
+            <a href="{{ url_for('profile') }}"
+              ><i data-feather="user"></i><span>Profile</span></a
+            >
+          </li>
+          <li>
+            <a href="{{ url_for('logout') }}"
+              ><i data-feather="log-out"></i><span>Logout</span></a
+            >
+          </li>
+        </ul>
       </nav>
 
       <!-- ==== Main Content ==== -->
@@ -61,19 +69,9 @@
         <!-- Main Header -->
         <header class="main-header">
           <div class="header-greeting">
-            <h1>Welcome Back, {{ user_name }}!</h1>
-            <p>Let's crush your goals today.</p>
+            <h1>Welcome back, {{ user.nickname or user.username }}!</h1>
+            <p>Let's crush your goals today 💪</p>
             <div class="header-separator"></div>
-          </div>
-          <div class="header-actions">
-            <div class="theme-toggle">
-              <i data-feather="sun" class="sun"></i>
-              <label class="switch">
-                <input type="checkbox" id="theme-toggle-checkbox" checked />
-                <span class="slider"></span>
-              </label>
-              <i data-feather="moon" class="moon"></i>
-            </div>
           </div>
         </header>
 
@@ -83,46 +81,46 @@
           <div class="card profile-card">
             <div class="profile-header">
               <img
-                src="https://i.pravatar.cc/150?u=alex"
+                src="{{ url_for('static', filename=user.profile_image.replace('static/', '')) if user.profile_image else url_for('static', filename='uploads/default.png') }}"
                 alt="User"
                 class="profile-avatar"
               />
               <div class="profile-info">
-                <h2>Alex Johnson</h2>
-                <p>Fitness Goal: Build Muscle</p>
+                <h2>{{ user.nickname or user.username }}</h2>
+                <p>Fitness Goal: {{ user.level or 'Beginner' }}</p>
               </div>
             </div>
             <div class="profile-stats">
               <div class="stat-item">
                 <span>Level</span>
-                <strong>Intermediate</strong>
+                <strong>{{ user.level or 'N/A' }}</strong>
               </div>
               <div class="stat-item">
                 <span>Workouts</span>
-                <strong>12</strong>
+                <strong id="workoutsCount">{{ workouts }}</strong>
               </div>
             </div>
           </div>
 
           <!-- Workout Summary -->
           <div class="card workout-summary-card">
-            <h3>Live Workout Summary</h3>
+            <h3>Today's Summary</h3>
             <div class="summary-grid">
               <div class="summary-item">
-                <i data-feather="repeat"></i><span>Total Reps</span>
-                <strong id="summary-reps">0</strong>
+                <i data-feather="repeat"></i><span>Reps</span>
+                <strong id="summary-reps">{{ total_reps }}</strong>
               </div>
               <div class="summary-item">
                 <i data-feather="layers"></i><span>Sets</span>
-                <strong id="summary-sets">0</strong>
+                <strong id="summary-sets">{{ total_sets }}</strong>
               </div>
               <div class="summary-item">
                 <i data-feather="clock"></i><span>Duration</span>
-                <strong id="summary-duration">0s</strong>
+                <strong id="summary-duration">{{ total_duration }}s</strong>
               </div>
               <div class="summary-item">
                 <i data-feather="zap"></i><span>Calories</span>
-                <strong id="summary-calories">0</strong>
+                <strong id="summary-calories">{{ calories }}</strong>
               </div>
             </div>
             <div class="progress-bar-container">
@@ -134,7 +132,7 @@
             </div>
           </div>
 
-          <!-- Accuracy Ring -->
+          <!-- Accuracy -->
           <div class="card accuracy-card">
             <h3>Exercise Accuracy</h3>
             <div class="progress-ring">
@@ -150,10 +148,12 @@
                   cx="80"
                   cy="80"
                   r="70"
-                  style="--value: 0"
+                  style="--value: {{ accuracy|default(0) }}"
                 ></circle>
               </svg>
-              <div id="accuracy-text" class="progress-ring-text">0%</div>
+              <div id="accuracy-text" class="progress-ring-text">
+                {{ accuracy|default(0) }}%
+              </div>
             </div>
           </div>
         </div>
@@ -162,29 +162,38 @@
 
     <script src="{{ url_for('static', filename='js/new_dashboard_script.js') }}"></script>
     <script>
-      // --- Page Transition Animation ---
-      document.addEventListener("DOMContentLoaded", () => {
-        const sidebarLinks = document.querySelectorAll(".sidebar-links a");
-        const mainContent = document.querySelector(".main-content");
+      feather.replace();
 
-        sidebarLinks.forEach((link) => {
-          // Don't animate external links or the currently active page
-          if (
-            link.parentElement.classList.contains("active") ||
-            !link.href.startsWith(window.location.origin)
-          ) {
-            return;
-          }
+      // Live update from /dashboard_data every 5s
+      async function updateDashboard() {
+        try {
+          const res = await fetch("/dashboard_data");
+          const data = await res.json();
+          document.getElementById("summary-reps").textContent =
+            data.daily_summary.reps;
+          document.getElementById("summary-sets").textContent =
+            data.daily_summary.sets;
+          document.getElementById("summary-duration").textContent =
+            data.daily_summary.duration + "s";
+          document.getElementById("summary-calories").textContent =
+            data.daily_summary.calories;
 
-          link.addEventListener("click", function (e) {
-            e.preventDefault();
-            mainContent.classList.add("fade-out");
-            setTimeout(() => {
-              window.location.href = this.href;
-            }, 500); // Match CSS animation duration
-          });
-        });
-      });
+          // Update accuracy ring and text
+          const accuracyText = document.getElementById("accuracy-text");
+          accuracyText.textContent = `${data.accuracy}%`;
+
+          const ring = document.querySelector(".progress-ring-circle");
+          ring.style.setProperty("--value", data.accuracy);
+
+          // Update live progress bar for active workout
+          const bar = document.getElementById("summary-progress-bar");
+          bar.style.width = data.live_summary.progress + "%";
+        } catch (err) {
+          console.error("Error updating dashboard:", err);
+        }
+      }
+      setInterval(updateDashboard, 5000);
+      updateDashboard();
     </script>
   </body>
 </html>

@@ -48,15 +48,25 @@
             >
           </li>
         </ul>
-        <div class="sidebar-footer">
-          <a href="#"><i data-feather="user"></i><span>Profile</span></a>
-          <a href="#"><i data-feather="log-out"></i><span>Logout</span></a>
-        </div>
+        <ul class="sidebar-footer">
+          <li>
+            <a href="{{ url_for('profile') }}"
+              ><i data-feather="user"></i><span>Profile</span></a
+            >
+          </li>
+          <li>
+            <a href="{{ url_for('logout') }}"
+              ><i data-feather="log-out"></i><span>Logout</span></a
+            >
+          </li>
+        </ul>
       </nav>
 
       <!-- ==== Main Content ==== -->
       <main class="main-content">
-        <h3 class="page-title">Workout History</h3>
+        <h3 class="page-title">
+          Workout History — {{ session['nickname'] or session['username'] }}
+        </h3>
 
         {% if history %}
         <div class="card-header">
