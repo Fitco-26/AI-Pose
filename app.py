@@ -1,3 +1,4 @@
+import pyttsx3
 import torch
 import numpy as np
 from flask import Flask, render_template, Response, jsonify, request, redirect, url_for, session, flash
@@ -7,11 +8,12 @@ from modules.pose_detector import PoseDetector
 from modules.curl_counter import CurlCounter
 from modules.squat_corrector import SquatCorrector
 from modules.posture.utils.angle_utils import map_angle_to_progress
+from werkzeug.utils import secure_filename
 import mediapipe as mp
-import pyttsx3
 import threading
 import time
-from werkzeug.utils import secure_filename
+import pythoncom
+import winsound
 import bcrypt
 from datetime import datetime, timedelta
 import mysql.connector
@@ -75,38 +77,65 @@ def save_config(config_data):
 
 app.config['APP_CONFIG'] = load_config()
 
-# --- TTS Engine Setup ---
-tts_engine = pyttsx3.init()
-speech_queue = queue.Queue()
-tts_lock = threading.Lock()
-
-
-def tts_worker():
-    """Runs continuously in a background thread to handle queued speech."""
-    while True:
-        text = speech_queue.get()  # Wait for text
-        if text is None:  # Exit signal
-            break
-        with tts_lock:
-            try:
-                tts_engine.say(text)
-                tts_engine.runAndWait()
-            except Exception as e:
-                print(f"TTS error: {e}")
-        speech_queue.task_done()
-
-
-# Start the single background TTS thread
-tts_thread = threading.Thread(target=tts_worker, daemon=True)
-tts_thread.start()
+# =========================
+# 🔊 STABLE VOICE FEEDBACK WITH COOLDOWN
+# =========================
+# Global memory for cooldowns
+last_spoken_time = 0
+last_feedback_times = {}  # { "message": timestamp }
+FEEDBACK_COOLDOWN = 3.0   # seconds between repeats of same line
 
 
 def speak_async(text):
-    """Adds speech text to the queue instead of creating new threads."""
-    if not app.config['APP_CONFIG'].get('speak_feedback', True):
+    """
+    Speak text asynchronously with cooldown per unique message.
+    Prevents repeating the same feedback too often (default 3 sec).
+    """
+    global last_spoken_time, last_feedback_times
+
+    if not text or not isinstance(text, str):
         return
-    if text and isinstance(text, str):
-        speech_queue.put(text)
+
+    now = time.time()
+
+    # Prevent spam of the same feedback within cooldown
+    if text in last_feedback_times and (now - last_feedback_times[text]) < FEEDBACK_COOLDOWN:
+        # Skip this feedback (still cooling down)
+        return
+
+    # Record last time this message was spoken
+    last_feedback_times[text] = now
+
+    # For general throttling between all messages
+    if now - last_spoken_time < 0.6:
+        return
+
+    last_spoken_time = now
+
+    def _speak_thread():
+        try:
+            pythoncom.CoInitialize()
+            engine = pyttsx3.init(driverName='sapi5')
+            voices = engine.getProperty('voices')
+            chosen = next(
+                (v for v in voices if "Zira" in v.name or "David" in v.name), voices[0])
+            engine.setProperty('voice', chosen.id)
+            engine.setProperty('rate', 175)
+            engine.setProperty('volume', 1.0)
+            winsound.Beep(700, 70)
+            print(f"TTS says: {text}")
+            engine.say(text)
+            engine.runAndWait()
+            engine.stop()
+        except Exception as e:
+            print(f"TTS error: {e}")
+
+    threading.Thread(target=_speak_thread, daemon=True).start()
+
+
+# ✅ Test on startup
+speak_async("Voice feedback system initialized and ready.")
+# =========================
 
 
 def calculate_bounded_improvement(current, previous):
@@ -219,6 +248,7 @@ workout_start_time = None
 show_landmarks = True  # Global state for landmark visibility
 ENABLE_CSV_BACKUP = False  # Optional CSV backup (disabled by default)
 # --- History File ---
+TARGET_REPS = DEFAULT_CONFIG['default_target_reps']
 HISTORY_FILE = 'data/workout_history.csv'
 
 # --- Landmark Visibility Check ---
@@ -324,17 +354,6 @@ def generate_frames():
                         if feedbacks:
                             form_warning = " | ".join(sorted(feedbacks))
 
-                        if exercise_handler.new_error_logged:
-                            # Unified error handling for both Curl and Squat
-                            if hasattr(exercise_handler, 'last_error'):
-                                error_side, error_msg = exercise_handler.last_error
-                                rep_at_error = stats.get(
-                                    error_side, stats.get('total', 0)) + 1
-                                side_text = f" ({error_side.capitalize()})" if error_side != 'squat' else ""
-                                stats["error_log"].append(
-                                    f"At Rep {rep_at_error}{side_text}: {error_msg}")
-                                exercise_handler.new_error_logged = False
-
                         current_rep_count = max(left, right)
                         if current_rep_count > last_spoken_rep:
                             speak_async(str(current_rep_count))
@@ -401,15 +420,6 @@ def generate_frames():
                         elif total == TARGET_REPS:
                             speak_async("Great set! Take a rest!")
 
-                    # Handle logged errors for squats
-                    if exercise_handler.new_error_logged:
-                        if hasattr(exercise_handler, 'last_error'):
-                            error_side, error_msg = exercise_handler.last_error
-                            rep_at_error = total + 1  # Error is for the upcoming rep
-                            stats["error_log"].append(
-                                f"At Rep {rep_at_error}: {error_msg}")
-                            exercise_handler.new_error_logged = False
-
                 # --- Common Logic (Completion, Voice Feedback) ---
                 if stats.get("total", 0) >= TARGET_REPS and is_workout_active:
                     is_workout_active = False
@@ -418,16 +428,31 @@ def generate_frames():
                     speak_async(stats["target_hit_message"])
                     continue
 
-                # Voice feedback for form warnings
-                current_time = time.time()
-                should_speak = form_warning and (form_warning != last_spoken_feedback or (
-                    current_time - last_spoken_time > app.config['APP_CONFIG']['feedback_cooldown_sec']))
-                if should_speak:
-                    speak_async(form_warning)
-                    last_spoken_feedback = form_warning
-                    last_spoken_time = current_time
-                elif not form_warning and last_spoken_feedback:
-                    last_spoken_feedback = ""
+                # ==========================================================
+                # 🔊 GLOBAL VOICE FEEDBACK HANDLER (for both curls & squats)
+                # ==========================================================
+                if exercise_handler and getattr(exercise_handler, "new_error_logged", False):
+                    if hasattr(exercise_handler, "last_error"):
+                        side, msg = exercise_handler.last_error
+                        print(
+                            f"🗣 Speaking feedback: {side}, {msg}")  # Debug confirmation
+                        if msg:
+                            try:
+                                # Format speech text
+                                if side in ("left", "right"):
+                                    speak_async(
+                                        f"{side.capitalize()} arm: {msg}")
+                                    # Also add to the on-screen log
+                                    stats["error_log"].append(
+                                        f"{side.capitalize()}: {msg}")
+                                else:
+                                    speak_async(msg)
+                                    # Also add to the on-screen log
+                                    stats["error_log"].append(f"{msg}")
+                            except Exception as e:
+                                print(f"⚠️ Voice feedback error: {e}")
+                        # Prevent repeat
+                        exercise_handler.new_error_logged = False
 
             # Encode frame for streaming
             _, buffer = cv2.imencode('.jpg', processed_image)
@@ -818,7 +843,7 @@ def start_workout():
     # Reset counters & stats at workout start
     stats = {"left": 0, "right": 0, "total": 0,
              "stage": "-", "warning": "", "progress": 0, "error_log": [],
-             "workout_complete": False, "target_hit_message": "Target Hit! Great job! Take a rest."}
+             "workout_complete": False, "target_hit_message": f"Target of {TARGET_REPS} hit! Great job! Take a rest."}
     TARGET_REPS = app.config['APP_CONFIG'].get('default_target_reps', 15)
     last_spoken_feedback = ""
     last_spoken_time = 0
@@ -1390,4 +1415,4 @@ def profile():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, threaded=True)
+    app.run(debug=False, threaded=True)
