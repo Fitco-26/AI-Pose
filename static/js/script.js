@@ -51,6 +51,11 @@ function updateStats() {
       if (data.error_log && data.error_log.length > 0) {
         errorLogEl.innerHTML =
           "<strong>Form Feedback:</strong><br>" + data.error_log.join("<br>");
+        // 🔽 Auto-scroll to latest feedback
+        errorLogContainer.scrollTo({
+          top: errorLogContainer.scrollHeight,
+          behavior: "smooth",
+        });
       } else {
         // If the log is empty but the container is visible (i.e., workout started), show the default message.
         if (!errorLogContainer.classList.contains("hidden")) {
